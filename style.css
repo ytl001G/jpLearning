@@ -274,6 +274,20 @@ span.word::after {
     border: 1px solid var(--primary);
 }
 
+.clear-card {
+    border-top-color: var(--hint-mean);
+}
+
+.danger-label {
+    color: var(--hint-mean);
+}
+
+.word-clear-confirm {
+    background: var(--hint-mean);
+    color: #FFFDFB;
+    border: 1px solid var(--hint-mean);
+}
+
 /* 🎯 수동 단어 추가 폼 */
 .add-word-form {
     display: grid;

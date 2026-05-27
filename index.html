@@ -27,10 +27,7 @@
             <div class="prompt-title">📜 문장 변환용 마스터 지침서</div>
             <button class="copy-btn" id="copy-prompt-btn">지침 복사하기</button>
         </div>
-        <div class="prompt-content" id="prompt-text"># Role
-너는 일본어 학습 데이터 생성 및 압축 변환 시스템이야. 사용자가 제공한 일본어 문장을 파싱하거나, 스스로 창작하여 경량 JSON 포맷으로 출력해야 해.
-[JSON Rules] 포맷: [type_정수, "본문텍스트", "히라가나발음(생략가능)", "동사원형(생략가능)", "한국어뜻"]
-결과물은 오직 {"words": [[...], [...]]} 형태의 단일 JSON 객체여야 함. 마크다운 기호 없이 순수 텍스트만 출력해줘.</div>
+        <div class="prompt-content" id="prompt-text" data-src="prompt.txt"></div>
     </div>
 </div>
 

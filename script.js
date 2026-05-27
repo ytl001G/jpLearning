@@ -24,6 +24,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const processButton = document.getElementById('process-button');
     const backButton = document.getElementById('back-button');
     const copyPromptBtn = document.getElementById('copy-prompt-btn');
+    const promptTextEl = document.getElementById('prompt-text');
+    const promptBox = document.querySelector('.prompt-box');
     const wordbookContainer = document.getElementById('wordbook-list-container');
     const clearAllBtn = document.getElementById('clear-all-btn');
     const addJp = document.getElementById('add-jp');
@@ -38,10 +40,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const cardNext = document.getElementById('card-next');
     const puncList = ["。", "、", "「", "」", "『", "』", "(", ")", "！", "？", "!", "?", "：", "—"];
     const saveDialog = createSaveDialog();
+    const clearDialog = createClearDialog();
     // 로컬스토리지 데이터 로드 파싱
     let savedWords = JSON.parse(localStorage.getItem('fogotten_japanese_words') || '[]');
     let currentCardIdx = 0;
     let pendingWord = null;
+    let promptContentText = '';
+    loadPromptText();
     // 지문 분석기 구동
     processButton.addEventListener('click', () => {
         const jsonText = textInput.value.trim();
@@ -53,6 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 renderJSON(data.words);
                 inputPage.style.display = 'none';
                 viewerPage.style.display = 'block';
+                promptBox.style.display = 'none';
             }
             else {
                 alert('올바른 데이터 구조가 아닙니다.');
@@ -65,6 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
     backButton.addEventListener('click', () => {
         viewerPage.style.display = 'none';
         inputPage.style.display = 'flex';
+        promptBox.style.display = 'block';
     });
     // 단어 직접 수동 추가
     addWordSubmit.addEventListener('click', () => {
@@ -90,12 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     // 전체 삭제 기능
     clearAllBtn.addEventListener('click', () => {
-        if (confirm('단어장을 초기화하시겠습니까?')) {
-            savedWords = [];
-            localStorage.setItem('fogotten_japanese_words', JSON.stringify(savedWords));
-            updateWordbookUI();
-            initStudyCard();
-        }
+        openClearDialog();
     });
     // 단어 개별 삭제 핸들러 전역 바인딩
     window.removeSingleWord = (text) => {
@@ -271,23 +273,80 @@ document.addEventListener("DOMContentLoaded", () => {
         saveDialog.setAttribute('aria-hidden', 'true');
         pendingWord = null;
     }
+    function createClearDialog() {
+        const dialog = document.createElement('div');
+        dialog.className = 'word-save-dialog';
+        dialog.setAttribute('aria-hidden', 'true');
+        dialog.innerHTML = `
+            <div class="word-save-card clear-card" role="dialog" aria-modal="true" aria-labelledby="clear-dialog-title">
+                <div class="word-save-label danger-label">단어장 정리</div>
+                <div class="word-save-title" id="clear-dialog-title">전체 삭제</div>
+                <div class="word-save-message">저장된 단어를 모두 삭제할까요? 이 작업은 되돌릴 수 없습니다.</div>
+                <div class="word-save-actions">
+                    <button type="button" class="word-save-cancel">취소</button>
+                    <button type="button" class="word-clear-confirm">삭제하기</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(dialog);
+        const cancelBtn = dialog.querySelector('.word-save-cancel');
+        const confirmBtn = dialog.querySelector('.word-clear-confirm');
+        cancelBtn.addEventListener('click', closeClearDialog);
+        dialog.addEventListener('click', (event) => {
+            if (event.target === dialog)
+                closeClearDialog();
+        });
+        confirmBtn.addEventListener('click', () => {
+            savedWords = [];
+            localStorage.setItem('fogotten_japanese_words', JSON.stringify(savedWords));
+            updateWordbookUI();
+            initStudyCard();
+            closeClearDialog();
+        });
+        return dialog;
+    }
+    function openClearDialog() {
+        clearDialog.classList.add('show');
+        clearDialog.setAttribute('aria-hidden', 'false');
+        const cancelBtn = clearDialog.querySelector('.word-save-cancel');
+        cancelBtn.focus();
+    }
+    function closeClearDialog() {
+        clearDialog.classList.remove('show');
+        clearDialog.setAttribute('aria-hidden', 'true');
+    }
     function askAndSave(wordObj) {
         if (savedWords.some((item) => item.text === wordObj.text))
             return;
         setTimeout(() => openSaveDialog(wordObj), 100);
     }
-    // 프롬프트 가이드라인 복사 스크립트
-    copyPromptBtn.addEventListener('click', () => {
-        const promptText = document.getElementById('prompt-text');
-        if (promptText) {
-            navigator.clipboard.writeText(promptText.innerText).then(() => {
-                copyPromptBtn.textContent = "✓ 복사 완료";
-                copyPromptBtn.classList.add('success');
-                setTimeout(() => {
-                    copyPromptBtn.textContent = "지침 복사하기";
-                    copyPromptBtn.classList.remove('success');
-                }, 2000);
-            });
+    // 프롬프트 파일 로드 및 복사
+    async function loadPromptText() {
+        if (!promptTextEl)
+            return;
+        const src = promptTextEl.dataset.src || 'prompt.txt';
+        try {
+            const response = await fetch(src);
+            if (!response.ok)
+                throw new Error(`Failed to load ${src}`);
+            promptContentText = await response.text();
+            promptTextEl.textContent = promptContentText;
         }
+        catch (error) {
+            promptTextEl.textContent = 'prompt.txt를 불러오지 못했습니다. 로컬 서버로 실행한 뒤 다시 확인해 주세요.';
+        }
+    }
+    copyPromptBtn.addEventListener('click', () => {
+        const textToCopy = promptContentText || promptTextEl.innerText;
+        if (!textToCopy)
+            return;
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            copyPromptBtn.textContent = "✓ 복사 완료";
+            copyPromptBtn.classList.add('success');
+            setTimeout(() => {
+                copyPromptBtn.textContent = "지침 복사하기";
+                copyPromptBtn.classList.remove('success');
+            }, 2000);
+        });
     });
 });
