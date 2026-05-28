@@ -2,71 +2,19 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>일본어 독서대 & 단어장</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>葉書 독서대</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<div id="tab-reader" class="page-content active">
-    <div class="container">
-        <h2>葉書 ： 일본어 독서대</h2>
-        <div id="input-page">
-            <textarea id="text-input" placeholder="이곳에 AI가 변환한 경량 JSON 데이터를 올려놓으세요..."></textarea>
-            <button class="btn start-btn" id="process-button">짚어 읽기 시작</button>
-        </div>
-        <div id="viewer-page">
-            <button class="btn back-btn" id="back-button">← 돌아가기</button>
-            <div id="viewer-area"></div>
-        </div>
-    </div>
-
-    <div class="prompt-box">
-        <div class="prompt-header">
-            <div class="prompt-title">📜 문장 변환용 마스터 지침서</div>
-            <button class="copy-btn" id="copy-prompt-btn">지침 복사하기</button>
-        </div>
-        <div class="prompt-content" id="prompt-text" data-src="prompt.txt"></div>
-    </div>
-</div>
-
-<div id="tab-wordbook" class="page-content">
-    <div class="container">
-        <h2>📓 나만의 암기 단어장</h2>
-        
-        <div class="study-card-area">
-            <div id="card-counter">0 / 0</div>
-            <div id="card-jp" class="study-card-jp">단어장이 비어있습니다</div>
-            <div id="card-hint" class="study-card-hint" style="display:none;">클릭하여 뜻 확인</div>
-            
-            <div class="card-controls" id="card-ctrls" style="display:none;">
-                <button class="card-btn" id="card-prev">◀ 이전</button>
-                <button class="card-btn" id="card-next">다음 ▶</button>
-            </div>
-        </div>
-
-        <div class="add-word-form">
-            <input type="text" id="add-jp" placeholder="일본어 표기 (예: 読書)">
-            <input type="text" id="add-kana" placeholder="발음 (선택, 예: どくしょ)">
-            <input type="text" id="add-mean" placeholder="한국어 뜻">
-            <button class="sm-add-btn" id="add-word-submit">추가</button>
-        </div>
-
-        <div class="list-header">
-            <span class="list-title">저장된 단어 리스트</span>
-            <button class="remove-btn" id="clear-all-btn">전체 삭제</button>
-        </div>
-        
-        <div class="wordbook-list" id="wordbook-list-container"></div>
-    </div>
-</div>
-
-<div class="tab-bar">
-    <button class="tab-btn active" onclick="switchTab('tab-reader')">📖 지문 독서대</button>
-    <button class="tab-btn" onclick="switchTab('tab-wordbook')">📓 나만의 단어장</button>
-</div>
-
-<script src="script.js"></script>
+    <main class="home-card">
+        <h1>葉書</h1>
+        <p>학습할 독서대를 선택하세요.</p>
+        <nav class="home-nav" aria-label="독서대 선택">
+            <a class="primary" href="jp/">일본어 독서대</a>
+            <a href="en/">영어 독서대</a>
+        </nav>
+    </main>
 </body>
 </html>

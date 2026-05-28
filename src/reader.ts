@@ -57,12 +57,13 @@ document.addEventListener("DOMContentLoaded", (): void => {
     const cardPrev = document.getElementById('card-prev') as HTMLButtonElement;
     const cardNext = document.getElementById('card-next') as HTMLButtonElement;
 
-    const puncList: string[] = ["。", "、", "「", "」", "『", "』", "(", ")", "！", "？", "!", "?", "：", "—"];
+    const puncList: string[] = ["。", "、", "「", "」", "『", "』", ".", ",", "\"", "'", "“", "”", "‘", "’", "(", ")", "！", "？", "!", "?", "：", ":", ";", "—", "-"];
     const saveDialog = createSaveDialog();
     const clearDialog = createClearDialog();
     
     // 로컬스토리지 데이터 로드 파싱
-    let savedWords: WordItem[] = JSON.parse(localStorage.getItem('fogotten_japanese_words') || '[]');
+    const storageKey: string = document.body.dataset.storageKey || 'forgotten_words_ko';
+    let savedWords: WordItem[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
     let currentCardIdx: number = 0;
     let pendingWord: WordItem | null = null;
     let promptContentText: string = '';
@@ -107,7 +108,7 @@ document.addEventListener("DOMContentLoaded", (): void => {
         
         if (!savedWords.some((item: WordItem) => item.text === jp)) {
             savedWords.push({ text: jp, kana: kana, mean: mean });
-            localStorage.setItem('fogotten_japanese_words', JSON.stringify(savedWords));
+            localStorage.setItem(storageKey, JSON.stringify(savedWords));
             addJp.value = ''; addKana.value = ''; addMean.value = '';
             updateWordbookUI();
             initStudyCard();
@@ -124,7 +125,7 @@ document.addEventListener("DOMContentLoaded", (): void => {
     // 단어 개별 삭제 핸들러 전역 바인딩
     (window as any).removeSingleWord = (text: string): void => {
         savedWords = savedWords.filter((item: WordItem) => item.text !== text);
-        localStorage.setItem('fogotten_japanese_words', JSON.stringify(savedWords));
+        localStorage.setItem(storageKey, JSON.stringify(savedWords));
         updateWordbookUI();
         if (currentCardIdx >= savedWords.length) {
             currentCardIdx = Math.max(0, savedWords.length - 1);
@@ -195,7 +196,8 @@ document.addEventListener("DOMContentLoaded", (): void => {
     function renderJSON(words: WordData[]): void {
         viewerArea.innerHTML = '';
         words.forEach((wordData: WordData) => {
-            const [type, text, kana, , mean] = wordData; 
+            const [type, text, kana, original, mean] = wordData; 
+            const hintText: string = kana || original || "";
             
             if (text === "\\n" || mean === "줄바꿈") {
                 const br: HTMLBRElement = document.createElement('br');
@@ -218,7 +220,7 @@ document.addEventListener("DOMContentLoaded", (): void => {
             span.classList.add('playable');
             span.dataset.stage = "0";
 
-            const isKanaOmitted: boolean = (!kana || !kana.trim() || text === kana);
+            const isKanaOmitted: boolean = (!hintText || !hintText.trim() || text === hintText);
 
             span.addEventListener('click', function(this: HTMLSpanElement) {
                 let stage: number = parseInt(this.dataset.stage || "0");
@@ -236,12 +238,12 @@ document.addEventListener("DOMContentLoaded", (): void => {
                 } else {
                     stage = (stage + 1) % 3;
                     if (stage === 1) { 
-                        this.dataset.hint = ` (${kana})`; 
-                        this.classList.add("stage-1"); 
-                    } else if (stage === 2) { 
-                        this.dataset.hint = ` (${kana}) [${mean}]`; 
-                        this.classList.add("stage-2"); 
-                        askAndSave({ text, kana, mean });
+                        this.dataset.hint = ` (${hintText})`; 
+                        this.classList.add("stage-1");
+                    } else if (stage === 2) {
+                        this.dataset.hint = ` (${hintText}) [${mean}]`; 
+                        this.classList.add("stage-2");
+                        askAndSave({ text, kana: hintText, mean });
                     } else { 
                         this.dataset.hint = ""; 
                     }
@@ -285,7 +287,7 @@ document.addEventListener("DOMContentLoaded", (): void => {
             }
 
             savedWords.push(pendingWord);
-            localStorage.setItem('fogotten_japanese_words', JSON.stringify(savedWords));
+            localStorage.setItem(storageKey, JSON.stringify(savedWords));
             updateWordbookUI();
             initStudyCard();
             closeSaveDialog();
@@ -340,7 +342,7 @@ document.addEventListener("DOMContentLoaded", (): void => {
         });
         confirmBtn.addEventListener('click', (): void => {
             savedWords = [];
-            localStorage.setItem('fogotten_japanese_words', JSON.stringify(savedWords));
+            localStorage.setItem(storageKey, JSON.stringify(savedWords));
             updateWordbookUI();
             initStudyCard();
             closeClearDialog();
