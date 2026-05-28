@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&display=swap');
+
 :root {
     --primary: #8C6239;          
     --primary-hover: #6F4E2C;
@@ -140,8 +142,8 @@ textarea {
 
 /* 🎯 독서대 지문 영역 */
 #viewer-area {
-    font-size: 22px;
-    letter-spacing: 2px;
+    font-size: 20px;
+    letter-spacing: 1px;
     word-wrap: break-word;
     word-break: break-all;
     line-height: 54px; 
@@ -164,11 +166,56 @@ span.playable { cursor: pointer; }
 span.playable:hover { background-color: rgba(140, 98, 57, 0.07); border-radius: 4px; }
 span.word::after {
     content: attr(data-hint);
-    font-size: 14px;
+    font-size: 12px;
     margin-left: 4px;
     font-weight: 500;
     font-family: system-ui, sans-serif;
     display: inline-block;
+}
+
+.reader-top-actions {
+    position: absolute;
+    top: 14px;
+    right: 18px;
+    z-index: 1;
+}
+
+.home-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: #FFFDFB;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.home-link:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+body[data-storage-key="forgotten_english_words_ko"] #viewer-area {
+    font-family: "Lora", Georgia, "Noto Serif KR", serif;
+    font-size: 19px;
+    letter-spacing: 0;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    word-spacing: 0.16em;
+}
+
+body[data-storage-key="forgotten_english_words_ko"] span.word {
+    padding: 0 0.5px;
+}
+
+body[data-storage-key="forgotten_english_words_ko"] span.word::after {
+    font-size: 11px;
+    word-spacing: normal;
 }
 
 /* 🎯 힌트 단계별 스타일링 */
@@ -356,7 +403,7 @@ span.word::after {
     color: var(--text-muted);
 }
 
-.study-card-jp { font-size: 28px; font-weight: 700; margin-bottom: 10px; color: var(--text-main); }
+.study-card-jp { font-size: 25px; font-weight: 700; margin-bottom: 10px; color: var(--text-main); }
 .study-card-hint { font-size: 16px; color: var(--hint-mean); min-height: 24px; cursor: pointer; background: #EFE6DC; padding: 4px 14px; border-radius: 4px; user-select: none; }
 .study-card-hint.revealed { background: transparent; }
 
@@ -385,3 +432,15 @@ span.word::after {
 .copy-btn { background-color: var(--bg-card); border: 1px solid var(--border-color); padding: 6px 14px; border-radius: 4px; font-size: 12px; cursor: pointer; }
 .copy-btn.success { background-color: #5A7356; color: white; }
 .prompt-content { width: 100%; height: 80px; font-size: 12px; font-family: monospace; color: #6E6458; background: #FFFDFB; border: 1px solid var(--border-color); border-radius: 4px; padding: 12px; box-sizing: border-box; overflow-y: auto; white-space: pre-wrap; }
+
+body[data-storage-key="forgotten_english_words_ko"] textarea,
+body[data-storage-key="forgotten_english_words_ko"] .study-card-jp,
+body[data-storage-key="forgotten_english_words_ko"] .wordbook-item .jp,
+body[data-storage-key="forgotten_english_words_ko"] #add-jp {
+    font-family: "Lora", Georgia, "Noto Serif KR", serif;
+}
+
+body[data-storage-key="forgotten_english_words_ko"] .study-card-jp {
+    font-size: 24px;
+    letter-spacing: 0;
+}

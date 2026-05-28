@@ -1,0 +1,14 @@
+{
+  "words": [
+    [2, "The", "/ðə/", "the", "그"],
+    [1, "quiet", "/ˈkwaɪət/", "quiet", "조용하다"],
+    [1, "library", "/ˈlaɪbreri/", "library", "도서관"],
+    [3, "became", "/bɪˈkeɪm/", "become", "되다"],
+    [2, "a", "/ə/", "a", "하나의"],
+    [1, "place", "/pleɪs/", "place", "장소"],
+    [2, "where", "/wer/", "where", "~하는 곳"],
+    [1, "students", "/ˈstuːdənts/", "student", "학생"],
+    [3, "could focus", "/kʊd ˈfoʊkəs/", "focus", "집중하다"],
+    [2, ".", "", ".", "마침표"]
+  ]
+}

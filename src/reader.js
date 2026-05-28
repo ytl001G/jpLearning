@@ -25,7 +25,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const backButton = document.getElementById('back-button');
     const copyPromptBtn = document.getElementById('copy-prompt-btn');
     const promptTextEl = document.getElementById('prompt-text');
-    const promptBox = document.querySelector('.prompt-box');
+    const copyExampleBtn = document.getElementById('copy-example-btn');
+    const exampleJsonEl = document.getElementById('example-json-text');
+    const readerSupportBoxes = document.querySelectorAll('.reader-support-box');
     const wordbookContainer = document.getElementById('wordbook-list-container');
     const clearAllBtn = document.getElementById('clear-all-btn');
     const addJp = document.getElementById('add-jp');
@@ -43,23 +45,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const clearDialog = createClearDialog();
     // 로컬스토리지 데이터 로드 파싱
     const storageKey = document.body.dataset.storageKey || 'forgotten_words_ko';
+    const isEnglishReader = storageKey === 'forgotten_english_words_ko';
     let savedWords = JSON.parse(localStorage.getItem(storageKey) || '[]');
     let currentCardIdx = 0;
     let pendingWord = null;
     let promptContentText = '';
+    let exampleJsonText = '';
     loadPromptText();
+    loadExampleJson();
     // 지문 분석기 구동
     processButton.addEventListener('click', () => {
         const jsonText = textInput.value.trim();
         if (!jsonText)
             return;
         try {
-            const data = JSON.parse(jsonText);
+            const data = parseJsonInput(jsonText);
             if (data && Array.isArray(data.words)) {
                 renderJSON(data.words);
                 inputPage.style.display = 'none';
                 viewerPage.style.display = 'block';
-                promptBox.style.display = 'none';
+                setReaderSupportVisible(false);
             }
             else {
                 alert('올바른 데이터 구조가 아닙니다.');
@@ -72,7 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
     backButton.addEventListener('click', () => {
         viewerPage.style.display = 'none';
         inputPage.style.display = 'flex';
-        promptBox.style.display = 'block';
+        setReaderSupportVisible(true);
     });
     // 단어 직접 수동 추가
     addWordSubmit.addEventListener('click', () => {
@@ -80,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const kana = addKana.value.trim();
         const mean = addMean.value.trim();
         if (!jp || !mean) {
-            alert('표기와 뜻은 필수 입력 항목입니다.');
+            alert('원형과 뜻은 필수 입력 항목입니다.');
             return;
         }
         if (!savedWords.some((item) => item.text === jp)) {
@@ -120,7 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
         savedWords.forEach((item) => {
             const div = document.createElement('div');
             div.className = 'wordbook-item';
-            const meta = item.kana ? `(${item.kana}) [${item.mean}]` : `[${item.mean}]`;
+            const meta = formatWordMeta(item);
             div.innerHTML = `<div><span class="jp">${item.text}</span><span class="meta">${meta}</span></div>
                              <button class="remove-btn" onclick="removeSingleWord('${item.text}')">✕</button>`;
             wordbookContainer.appendChild(div);
@@ -166,10 +171,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // 독서대 지문 컴포넌트 렌더링 시스템
     function renderJSON(words) {
         viewerArea.innerHTML = '';
-        words.forEach((wordData) => {
+        words.forEach((wordData, index) => {
             const [type, text, kana, original, mean] = wordData;
-            const hintText = kana || original || "";
-            if (text === "\\n" || mean === "줄바꿈") {
+            const pronunciation = kana || "";
+            const baseText = original && original.trim() ? original : text;
+            const wordToSave = { text: baseText, kana: pronunciation, mean };
+            if (isLineBreakToken(text, mean)) {
                 const br = document.createElement('br');
                 const brBlock = document.createElement('span');
                 brBlock.className = 'br-block';
@@ -182,20 +189,21 @@ document.addEventListener("DOMContentLoaded", () => {
             span.textContent = text;
             if (type === 2 && puncList.includes(text)) {
                 viewerArea.appendChild(span);
+                appendEnglishSpaceIfNeeded(words, index, text);
                 return;
             }
             span.classList.add('playable');
             span.dataset.stage = "0";
-            const isKanaOmitted = (!hintText || !hintText.trim() || text === hintText);
+            const isPronunciationOmitted = (!pronunciation || !pronunciation.trim() || text === pronunciation);
             span.addEventListener('click', function () {
                 let stage = parseInt(this.dataset.stage || "0");
                 this.classList.remove("stage-1", "stage-2", "stage-3");
-                if (isKanaOmitted || type === 2 || type === 4) {
+                if (isPronunciationOmitted || type === 2 || type === 4) {
                     stage = (stage + 1) % 2;
                     if (stage === 1) {
                         this.dataset.hint = ` [${mean}]`;
                         this.classList.add("stage-3");
-                        askAndSave({ text, kana: "", mean });
+                        askAndSave(wordToSave);
                     }
                     else {
                         this.dataset.hint = "";
@@ -204,13 +212,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 else {
                     stage = (stage + 1) % 3;
                     if (stage === 1) {
-                        this.dataset.hint = ` (${hintText})`;
+                        this.dataset.hint = ` (${pronunciation})`;
                         this.classList.add("stage-1");
                     }
                     else if (stage === 2) {
-                        this.dataset.hint = ` (${hintText}) [${mean}]`;
+                        this.dataset.hint = ` (${pronunciation}) [${mean}]`;
                         this.classList.add("stage-2");
-                        askAndSave({ text, kana: hintText, mean });
+                        askAndSave(wordToSave);
                     }
                     else {
                         this.dataset.hint = "";
@@ -219,6 +227,47 @@ document.addEventListener("DOMContentLoaded", () => {
                 this.dataset.stage = stage.toString();
             });
             viewerArea.appendChild(span);
+            appendEnglishSpaceIfNeeded(words, index, text);
+        });
+    }
+    function appendEnglishSpaceIfNeeded(words, index, currentText) {
+        if (!isEnglishReader)
+            return;
+        const next = words[index + 1];
+        if (!next || isLineBreakToken(next[1], next[4]))
+            return;
+        const nextText = next[1];
+        const noSpaceBefore = [".", ",", "!", "?", ":", ";", ")", "]", "}", "'", "\""];
+        const noSpaceAfter = ["(", "[", "{", "'", "\""];
+        if (noSpaceBefore.includes(nextText) || noSpaceAfter.includes(currentText))
+            return;
+        viewerArea.appendChild(document.createTextNode(" "));
+    }
+    function parseJsonInput(input) {
+        const cleaned = input
+            .replace(/^```(?:json)?\s*/i, '')
+            .replace(/\s*```$/i, '')
+            .trim();
+        try {
+            return JSON.parse(cleaned);
+        }
+        catch (error) {
+            const start = cleaned.indexOf('{');
+            const end = cleaned.lastIndexOf('}');
+            if (start === -1 || end === -1 || end <= start)
+                throw error;
+            return JSON.parse(cleaned.slice(start, end + 1));
+        }
+    }
+    function isLineBreakToken(text, mean) {
+        return text === '\n' || text === '\\n' || mean === '줄바꿈';
+    }
+    function formatWordMeta(item) {
+        return item.kana ? `(${item.kana}) [${item.mean}]` : `[${item.mean}]`;
+    }
+    function setReaderSupportVisible(isVisible) {
+        readerSupportBoxes.forEach((box) => {
+            box.style.display = isVisible ? 'block' : 'none';
         });
     }
     // 글 안에서 찾은 단어 저장 확인창
@@ -338,6 +387,21 @@ document.addEventListener("DOMContentLoaded", () => {
             promptTextEl.textContent = 'prompt.txt를 불러오지 못했습니다. 로컬 서버로 실행한 뒤 다시 확인해 주세요.';
         }
     }
+    async function loadExampleJson() {
+        if (!exampleJsonEl)
+            return;
+        const src = exampleJsonEl.dataset.src || 'example.json';
+        try {
+            const response = await fetch(src);
+            if (!response.ok)
+                throw new Error(`Failed to load ${src}`);
+            exampleJsonText = await response.text();
+            exampleJsonEl.textContent = exampleJsonText;
+        }
+        catch (error) {
+            exampleJsonEl.textContent = 'example.json을 불러오지 못했습니다. 로컬 서버로 실행한 뒤 다시 확인해 주세요.';
+        }
+    }
     copyPromptBtn.addEventListener('click', () => {
         const textToCopy = promptContentText || promptTextEl.innerText;
         if (!textToCopy)
@@ -348,6 +412,19 @@ document.addEventListener("DOMContentLoaded", () => {
             setTimeout(() => {
                 copyPromptBtn.textContent = "지침 복사하기";
                 copyPromptBtn.classList.remove('success');
+            }, 2000);
+        });
+    });
+    copyExampleBtn.addEventListener('click', () => {
+        const textToCopy = exampleJsonText || exampleJsonEl.innerText;
+        if (!textToCopy)
+            return;
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            copyExampleBtn.textContent = "✓ 복사 완료";
+            copyExampleBtn.classList.add('success');
+            setTimeout(() => {
+                copyExampleBtn.textContent = "예시 복사하기";
+                copyExampleBtn.classList.remove('success');
             }, 2000);
         });
     });
