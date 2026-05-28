@@ -416,6 +416,25 @@ h2::after {
     font-weight: 700;
     color: var(--text-main);
 }
+.list-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sort-select {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-main);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px 10px;
+}
+.sort-select:focus {
+    border-color: var(--primary);
+    outline: none;
+}
 
 /* 🎯 단어 아이템 리스트 */
 .wordbook-list {
@@ -423,6 +442,12 @@ h2::after {
     flex-direction: column;
     gap: 10px;
     margin-bottom: 40px;
+}
+.wordbook-empty {
+    color: var(--text-muted);
+    font-size: 14px;
+    padding: 30px 0;
+    text-align: center;
 }
 .wordbook-item {
     background-color: var(--bg-card);
