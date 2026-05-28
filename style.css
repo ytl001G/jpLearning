@@ -1,10 +1,25 @@
 :root {
-    --primary: #8C6239;
-    --bg-main: #F4EBE1;
-    --bg-card: #FAF6F0;
-    --text-main: #3E3429;
-    --text-muted: #8A7E72;
-    --border-color: #E6D9CB;
+    --bg-main: #f5f7f4;
+    --bg-panel: #ffffff;
+    --bg-reader: #fffdf8;
+    --ink: #202824;
+    --muted: #6d746f;
+    --line: #dfe6df;
+    --line-strong: #cbd8cf;
+    --primary: #315c4f;
+    --primary-hover: #24463d;
+    --primary-soft: #e3eee8;
+    --accent: #b38746;
+    --shadow-md: 0 12px 28px rgba(31, 43, 37, 0.09);
+    --shadow-lg: 0 24px 60px rgba(31, 43, 37, 0.16);
+    --radius-md: 8px;
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ui-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+    --serif-font: "Noto Serif KR", "Noto Serif JP", "Shippori Mincho", "MS Mincho", "Yu Mincho", serif;
+}
+
+* {
+    box-sizing: border-box;
 }
 
 body {
@@ -13,34 +28,64 @@ body {
     display: grid;
     place-items: center;
     padding: 24px;
-    box-sizing: border-box;
-    background: var(--bg-main);
-    color: var(--text-main);
-    font-family: "Noto Serif KR", "Noto Serif JP", Georgia, serif;
+    background:
+        linear-gradient(180deg, rgba(227, 238, 232, 0.72) 0, rgba(245, 247, 244, 0) 270px),
+        var(--bg-main);
+    color: var(--ink);
+    font-family: var(--serif-font);
 }
 
 .home-card {
-    width: min(420px, 100%);
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-top: 4px solid var(--primary);
-    border-radius: 6px;
-    padding: 32px;
-    box-sizing: border-box;
-    box-shadow: 0 12px 32px rgba(140, 98, 57, 0.10);
+    width: min(440px, 100%);
+    padding: 34px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 253, 248, 0.96)),
+        var(--bg-panel);
+    box-shadow: var(--shadow-lg);
+}
+
+.home-label {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    margin-bottom: 18px;
+    padding: 6px 11px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-family: var(--ui-font);
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1;
 }
 
 h1 {
-    margin: 0 0 8px;
+    margin: 0 0 10px;
     color: var(--primary);
-    font-size: 28px;
-    line-height: 1.25;
+    font-size: 44px;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: 0;
+}
+
+h1::after {
+    content: "";
+    display: block;
+    width: 44px;
+    height: 3px;
+    margin-top: 16px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
 }
 
 p {
-    margin: 0 0 24px;
-    color: var(--text-muted);
-    font-size: 14px;
+    margin: 0 0 26px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.7;
 }
 
 .home-nav {
@@ -49,18 +94,66 @@ p {
 }
 
 a {
-    display: block;
-    padding: 13px 16px;
-    border: 1px solid var(--primary);
-    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 13px 18px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #ffffff;
     color: var(--primary);
-    text-decoration: none;
-    font-weight: 700;
+    font-family: var(--ui-font);
+    font-size: 15px;
+    font-weight: 900;
     text-align: center;
-    background: #FFFDFB;
+    text-decoration: none;
+    box-shadow: var(--shadow-md);
+    transition: transform 0.22s var(--ease), box-shadow 0.22s var(--ease), background-color 0.22s var(--ease), border-color 0.22s var(--ease);
 }
 
 a.primary {
+    border-color: var(--primary);
     background: var(--primary);
-    color: #FFFDFB;
+    color: #ffffff;
+    box-shadow: 0 14px 28px rgba(49, 92, 79, 0.2);
+}
+
+a.primary::after {
+    content: "→";
+    margin-left: 10px;
+    transition: transform 0.22s var(--ease);
+}
+
+a:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-lg);
+}
+
+a.primary:hover {
+    background: var(--primary-hover);
+    border-color: var(--primary-hover);
+}
+
+a.primary:hover::after {
+    transform: translateX(2px);
+}
+
+a:focus-visible {
+    outline: 3px solid rgba(49, 92, 79, 0.22);
+    outline-offset: 3px;
+}
+
+@media (max-width: 520px) {
+    body {
+        padding: 18px;
+    }
+
+    .home-card {
+        padding: 28px 22px;
+    }
+
+    h1 {
+        font-size: 38px;
+    }
 }
