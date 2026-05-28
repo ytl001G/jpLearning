@@ -1,17 +1,17 @@
 :root {
-    --bg-main: #f5f7f4;
+    --bg-main: #f8f1e7;
     --bg-panel: #ffffff;
-    --bg-reader: #fffdf8;
-    --ink: #202824;
-    --muted: #6d746f;
-    --line: #dfe6df;
-    --line-strong: #cbd8cf;
-    --primary: #315c4f;
-    --primary-hover: #24463d;
-    --primary-soft: #e3eee8;
-    --accent: #b38746;
-    --shadow-md: 0 12px 28px rgba(31, 43, 37, 0.09);
-    --shadow-lg: 0 24px 60px rgba(31, 43, 37, 0.16);
+    --bg-reader: #fffaf1;
+    --ink: #30271f;
+    --muted: #776b60;
+    --line: #e5d8c8;
+    --line-strong: #d5c3ae;
+    --primary: #6f4b2e;
+    --primary-hover: #52361f;
+    --primary-soft: #f1e4d2;
+    --accent: #a0473f;
+    --shadow-md: 0 12px 28px rgba(72, 48, 29, 0.09);
+    --shadow-lg: 0 24px 60px rgba(72, 48, 29, 0.16);
     --radius-md: 8px;
     --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
     --ui-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
@@ -29,7 +29,7 @@ body {
     place-items: center;
     padding: 24px;
     background:
-        linear-gradient(180deg, rgba(227, 238, 232, 0.72) 0, rgba(245, 247, 244, 0) 270px),
+        linear-gradient(180deg, rgba(242, 231, 216, 0.82) 0, rgba(248, 241, 231, 0) 270px),
         var(--bg-main);
     color: var(--ink);
     font-family: var(--serif-font);
@@ -44,22 +44,6 @@ body {
         linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 253, 248, 0.96)),
         var(--bg-panel);
     box-shadow: var(--shadow-lg);
-}
-
-.home-label {
-    display: inline-flex;
-    align-items: center;
-    min-height: 28px;
-    margin-bottom: 18px;
-    padding: 6px 11px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--primary-soft);
-    color: var(--primary);
-    font-family: var(--ui-font);
-    font-size: 12px;
-    font-weight: 900;
-    line-height: 1;
 }
 
 h1 {
@@ -116,7 +100,7 @@ a.primary {
     border-color: var(--primary);
     background: var(--primary);
     color: #ffffff;
-    box-shadow: 0 14px 28px rgba(49, 92, 79, 0.2);
+    box-shadow: 0 14px 28px rgba(111, 75, 46, 0.2);
 }
 
 a.primary::after {
@@ -140,7 +124,7 @@ a.primary:hover::after {
 }
 
 a:focus-visible {
-    outline: 3px solid rgba(49, 92, 79, 0.22);
+    outline: 3px solid rgba(111, 75, 46, 0.22);
     outline-offset: 3px;
 }
 
