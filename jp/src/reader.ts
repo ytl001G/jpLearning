@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
     });
 
     sortSelect.value = dictionary.getSortMode();
+    setupSortDropdown(sortSelect);
     refreshWordbook();
     loadPromptText();
     loadExampleJson();
@@ -209,4 +210,76 @@ function copyLoadedText(text: string, button: HTMLButtonElement, defaultLabel: s
             button.classList.remove('success');
         }, 2000);
     });
+}
+
+function setupSortDropdown(select: HTMLSelectElement): void {
+    const wrapper = document.createElement('div');
+    const trigger = document.createElement('button');
+    const menu = document.createElement('div');
+    const selectedText = document.createElement('span');
+    let closeTimer: number | undefined;
+
+    wrapper.className = 'sort-dropdown';
+    trigger.className = 'sort-dropdown-trigger';
+    trigger.type = 'button';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    menu.className = 'sort-dropdown-menu';
+    menu.setAttribute('role', 'listbox');
+    selectedText.className = 'sort-dropdown-label';
+
+    trigger.appendChild(selectedText);
+    Array.from(select.options).forEach((option) => {
+        const item = document.createElement('button');
+        item.className = 'sort-dropdown-option';
+        item.type = 'button';
+        item.textContent = option.textContent;
+        item.dataset.value = option.value;
+        item.setAttribute('role', 'option');
+        item.addEventListener('click', () => {
+            select.value = option.value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            wrapper.classList.remove('open');
+            trigger.setAttribute('aria-expanded', 'false');
+        });
+        menu.appendChild(item);
+    });
+
+    const sync = (): void => {
+        const selected = select.selectedOptions[0];
+        selectedText.textContent = selected?.textContent || '정렬';
+        menu.querySelectorAll<HTMLButtonElement>('.sort-dropdown-option').forEach((item) => {
+            const isSelected = item.dataset.value === select.value;
+            item.classList.toggle('selected', isSelected);
+            item.setAttribute('aria-selected', String(isSelected));
+        });
+    };
+
+    const open = (): void => {
+        if (closeTimer) window.clearTimeout(closeTimer);
+        wrapper.classList.add('open');
+        trigger.setAttribute('aria-expanded', 'true');
+    };
+
+    const close = (): void => {
+        wrapper.classList.remove('open');
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    wrapper.addEventListener('mouseenter', open);
+    wrapper.addEventListener('mouseleave', () => {
+        closeTimer = window.setTimeout(close, 180);
+    });
+    menu.addEventListener('mouseenter', open);
+    trigger.addEventListener('click', () => {
+        if (closeTimer) window.clearTimeout(closeTimer);
+        const isOpen = wrapper.classList.toggle('open');
+        trigger.setAttribute('aria-expanded', String(isOpen));
+    });
+    select.addEventListener('change', sync);
+
+    select.classList.add('native-sort-select');
+    select.after(wrapper);
+    wrapper.append(trigger, menu);
+    sync();
 }

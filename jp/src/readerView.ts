@@ -100,26 +100,86 @@ export function renderWordbook(
         const body = document.createElement('div');
         const jp = document.createElement('span');
         const meta = document.createElement('span');
+        const actions = document.createElement('div');
+        const ttsBtn = document.createElement('button');
         const removeBtn = document.createElement('button');
 
+        body.className = 'wordbook-body';
         jp.className = 'jp';
         jp.textContent = item.text;
         meta.className = 'meta';
         meta.textContent = item.kana ? `(${item.kana}) [${item.mean}]` : `[${item.mean}]`;
+        actions.className = 'wordbook-actions';
+        ttsBtn.className = 'tts-btn';
+        ttsBtn.type = 'button';
+        ttsBtn.innerHTML = speakerIconSvg();
+        ttsBtn.setAttribute('aria-label', `${item.text} 발음 듣기`);
+        ttsBtn.title = '발음 듣기';
+        ttsBtn.addEventListener('click', () => playJapaneseTts(item.text, ttsBtn));
         removeBtn.className = 'remove-btn';
         removeBtn.type = 'button';
         removeBtn.textContent = '✕';
         removeBtn.addEventListener('click', () => onRemove(item.text));
 
         body.append(jp, meta);
-        div.append(body, removeBtn);
+        actions.append(ttsBtn, removeBtn);
+        div.append(body, actions);
         container.appendChild(div);
     });
+}
+
+function playJapaneseTts(text: string, triggerButton?: HTMLButtonElement): void {
+    const query = text.trim();
+    if (!query) return;
+
+    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+        openGoogleTranslate(query);
+        return;
+    }
+
+    const speak = (): void => {
+        const utterance = new SpeechSynthesisUtterance(query);
+        const voices = window.speechSynthesis.getVoices();
+        const japaneseVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith('ja'));
+        utterance.voice = japaneseVoices.find((voice) => voice.name.toLowerCase().includes('google'))
+            || japaneseVoices[0]
+            || null;
+        utterance.lang = 'ja-JP';
+        utterance.rate = 0.9;
+        utterance.onend = () => triggerButton?.classList.remove('is-playing');
+        utterance.onerror = () => triggerButton?.classList.remove('is-playing');
+
+        window.speechSynthesis.cancel();
+        triggerButton?.classList.add('is-playing');
+        window.speechSynthesis.speak(utterance);
+    };
+
+    if (window.speechSynthesis.getVoices().length > 0) {
+        speak();
+    } else {
+        window.speechSynthesis.addEventListener('voiceschanged', speak, { once: true });
+        window.speechSynthesis.getVoices();
+    }
+}
+
+function openGoogleTranslate(text: string): void {
+    window.open(`https://translate.google.com/?sl=ja&tl=ko&text=${encodeURIComponent(text)}&op=translate`, '_blank', 'noopener');
+}
+
+function speakerIconSvg(): string {
+    return `
+        <svg class="tts-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path class="tts-icon-body" d="M4.5 9.25h3.25L12.2 5.4v13.2l-4.45-3.85H4.5z"></path>
+            <path class="tts-icon-wave" d="M15.1 9.25c.75.72 1.15 1.62 1.15 2.75s-.4 2.03-1.15 2.75"></path>
+            <path class="tts-icon-wave" d="M17.75 6.75A7.1 7.1 0 0 1 19.9 12a7.1 7.1 0 0 1-2.15 5.25"></path>
+        </svg>
+    `;
 }
 
 export class StudyCard {
     private index = 0;
     private words: WordItem[] = [];
+    private readonly ttsBtn: HTMLButtonElement;
 
     constructor(
         private readonly cardJp: HTMLDivElement,
@@ -129,6 +189,18 @@ export class StudyCard {
         private readonly cardPrev: HTMLButtonElement,
         private readonly cardNext: HTMLButtonElement
     ) {
+        this.ttsBtn = document.createElement('button');
+        this.ttsBtn.className = 'tts-btn study-tts-btn';
+        this.ttsBtn.type = 'button';
+        this.ttsBtn.innerHTML = speakerIconSvg();
+        this.ttsBtn.title = '발음 듣기';
+        this.ttsBtn.setAttribute('aria-label', '플래시카드 발음 듣기');
+        this.cardJp.after(this.ttsBtn);
+
+        this.ttsBtn.addEventListener('click', () => {
+            const item = this.words[this.index];
+            if (item) playJapaneseTts(item.text, this.ttsBtn);
+        });
         this.cardHint.addEventListener('click', () => this.reveal());
         this.cardPrev.addEventListener('click', () => this.move(-1));
         this.cardNext.addEventListener('click', () => this.move(1));
@@ -145,6 +217,7 @@ export class StudyCard {
     private render(): void {
         if (this.words.length === 0) {
             this.cardJp.textContent = '단어장이 비어있습니다';
+            this.ttsBtn.style.display = 'none';
             this.cardHint.style.display = 'none';
             this.cardCtrls.style.display = 'none';
             this.cardCounter.textContent = '0 / 0';
@@ -152,6 +225,8 @@ export class StudyCard {
         }
 
         const item = this.words[this.index];
+        this.ttsBtn.style.display = 'inline-flex';
+        this.ttsBtn.setAttribute('aria-label', `${item.text} 발음 듣기`);
         this.cardHint.style.display = 'inline-block';
         this.cardCtrls.style.display = 'flex';
         this.cardJp.textContent = item.text;
