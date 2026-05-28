@@ -1,0 +1,657 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;500;700&family=Noto+Serif+KR:wght@400;500;700&display=swap');
+
+:root {
+    --primary: #7c5835;          
+    --primary-hover: #5d4126;
+    --primary-light: #f5eedf;
+    --bg-main: #f9f6f0;          
+    --bg-card: #ffffff;          
+    --text-main: #2e261f;        
+    --text-muted: #827568;
+    --border-color: #eadecf;     
+    --hint-kana: #2c6e85;        /* stage-1: 히라가나 발음 색상 */
+    --hint-both: #4a7545;        /* stage-2: 발음 + 문맥형 뜻 색상 */
+    --hint-stage3: #b04e2a;      /* stage-3: 활용/과거형 힌트 강조용 오렌지 브라운 색상 */
+    --danger: #b84040;
+    --shadow-sm: 0 2px 8px rgba(124, 88, 53, 0.04);
+    --shadow-md: 0 8px 24px rgba(124, 88, 53, 0.08);
+    --radius-sm: 8px;
+    --radius-md: 14px;
+}
+
+body {
+    /* 일본어와 한국어 서체 표현에 가장 아름다운 바탕체(Mincho) 계열 폰트 적용 */
+    font-family: "Noto Serif KR", "Noto Serif JP", "Shippori Mincho", "MS Mincho", "Yu Mincho", serif;
+    background-color: var(--bg-main);
+    padding: 20px 20px 100px 20px; 
+    color: var(--text-main);
+    margin: 0;
+    -webkit-tap-highlight-color: transparent;
+    line-height: 1.8;
+}
+
+/* 🎯 상단 탑 액션 레이아웃 & Home 링크 스타일 */
+.reader-top-actions {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: -10px;
+    padding: 0 4px;
+}
+.home-link {
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 6px 16px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    text-decoration: none;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.home-link::before {
+    content: "🏠";
+    font-size: 12px;
+    margin-right: 6px;
+}
+.home-link:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background-color: var(--primary-light);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(124, 88, 53, 0.08);
+}
+.home-link:active {
+    transform: translateY(0);
+}
+
+/* 🎯 하단 고정 탭 바 */
+.tab-bar {
+    position: fixed;
+    bottom: 20px; left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 40px);
+    max-width: 500px;
+    height: 64px;
+    background-color: rgba(255, 255, 255, 0.92);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    border-radius: 40px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 1000;
+    box-shadow: 0 10px 30px rgba(124, 88, 53, 0.12);
+}
+.tab-btn {
+    flex: 1;
+    height: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 40px;
+}
+.tab-btn:hover {
+    color: var(--primary);
+}
+.tab-btn.active {
+    color: var(--primary);
+    font-weight: 700;
+    background-color: var(--primary-light);
+}
+
+/* 🎯 페이지 콘텐츠 레이아웃 */
+.page-content {
+    display: none;
+    animation: fadeIn 0.4s ease-out;
+}
+.page-content.active {
+    display: block;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.container {
+    max-width: 680px;
+    margin: 0 auto;
+}
+h2 {
+    font-size: 24px;
+    color: var(--primary);
+    text-align: center;
+    margin-top: 20px;
+    margin-bottom: 30px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    position: relative;
+    padding-bottom: 12px;
+}
+h2::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 2px;
+    background-color: var(--primary);
+}
+
+/* 🎯 입력 페이지 */
+#input-page {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+#text-input {
+    width: 100%;
+    height: 280px;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    box-sizing: border-box;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 14px;
+    color: var(--text-main);
+    resize: none;
+    outline: none;
+    line-height: 1.6;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+#text-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(124, 88, 53, 0.15);
+}
+.btn {
+    width: 100%;
+    padding: 16px;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(124, 88, 53, 0.15);
+}
+.start-btn {
+    background-color: var(--primary);
+    color: #FFFDFB;
+}
+.start-btn:hover {
+    background-color: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(124, 88, 53, 0.25);
+}
+.start-btn:active {
+    transform: translateY(0);
+}
+.back-btn {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--primary);
+    margin-bottom: 20px;
+    padding: 12px;
+    font-size: 14px;
+    box-shadow: var(--shadow-sm);
+}
+.back-btn:hover {
+    background-color: var(--primary-light);
+    border-color: var(--primary);
+}
+
+/* 🎯 뷰어 영역 (짚어 읽기) */
+#viewer-page {
+    display: none;
+}
+#viewer-area {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 35px 30px;
+    font-size: 21px;
+    line-height: 2.3;
+    word-break: break-all;
+    min-height: 250px;
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    align-items: baseline;
+}
+
+/* 💡 일본어 가독성을 위해 인위적인 띄어쓰기 여백을 원천 배제 */
+.word {
+    display: inline-block;
+    position: relative;
+    cursor: default;
+    border-radius: 4px;
+    padding: 2px 0px; 
+    margin: 0;        
+    transition: background-color 0.2s ease, color 0.2s ease;
+    white-space: pre; 
+}
+.word.playable {
+    cursor: pointer;
+}
+.word.playable:hover {
+    background-color: var(--primary-light);
+    color: var(--primary);
+}
+
+/* 🎯 일본어 3단계 단계별 상호작용 색상 */
+.word.stage-1 {
+    color: var(--hint-kana) !important;
+    background-color: rgba(44, 110, 133, 0.06);
+}
+.word.stage-2 {
+    color: var(--hint-both) !important;
+    background-color: rgba(74, 117, 69, 0.06);
+}
+.word.stage-3 {
+    color: var(--hint-stage3) !important;
+    background-color: rgba(176, 78, 42, 0.06);
+}
+
+.word::after {
+    content: attr(data-hint);
+    font-size: 13px;
+    font-weight: 500;
+    vertical-align: baseline;
+    margin-left: 1px;
+    font-family: "Noto Serif KR", sans-serif;
+    letter-spacing: -0.3px;
+    transition: color 0.2s;
+    display: inline-block;
+}
+.word.stage-1::after { color: var(--hint-kana); font-weight: 700; }
+.word.stage-2::after { color: var(--hint-both); font-weight: 700; }
+.word.stage-3::after { color: var(--hint-stage3); font-weight: 700; }
+
+/* 줄바꿈 블록 높이 제어 */
+.br-block {
+    display: block;
+    width: 100%; 
+    height: 15px;
+}
+
+/* 🎯 나만의 암기 단어장 플래시 카드 */
+.study-card-area {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 40px 20px;
+    text-align: center;
+    margin-bottom: 25px;
+    box-shadow: var(--shadow-md);
+    transition: transform 0.3s;
+}
+#card-counter {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    font-weight: 500;
+}
+.study-card-jp {
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 20px;
+    letter-spacing: -0.5px;
+}
+.study-card-hint {
+    display: inline-block;
+    padding: 10px 22px;
+    border-radius: 30px;
+    background-color: var(--primary-light);
+    color: var(--primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.25s ease;
+}
+.study-card-hint:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(124, 88, 53, 0.1);
+}
+.study-card-hint.revealed {
+    background-color: var(--primary);
+    color: #FFFDFB;
+    font-weight: 500;
+}
+.card-controls {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 30px;
+}
+.card-btn {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    padding: 10px 20px;
+    border-radius: 30px;
+    color: var(--text-main);
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+.card-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background-color: var(--primary-light);
+}
+
+/* 🎯 일본어 단어 수동 등록 폼 */
+.add-word-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 30px;
+    box-shadow: var(--shadow-sm);
+}
+.add-word-form input {
+    flex: 1;
+    min-width: 120px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    background-color: #FFFDFB;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.add-word-form input:focus {
+    border-color: var(--primary);
+}
+.sm-add-btn {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+.sm-add-btn:hover {
+    background-color: var(--primary-hover);
+}
+
+/* 🎯 단어장 목록 헤더 */
+.list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding: 0 6px;
+}
+.list-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+/* 🎯 단어 아이템 리스트 */
+.wordbook-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 40px;
+}
+.wordbook-item {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.wordbook-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(124, 88, 53, 0.06);
+}
+.wordbook-item .jp {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+.wordbook-item .meta {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-left: 10px;
+}
+.remove-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+.remove-btn:hover {
+    color: var(--danger);
+    background-color: rgba(184, 64, 64, 0.05);
+}
+
+/* 🎯 하단 프롬프트 박스 */
+.prompt-box {
+    max-width: 680px;
+    margin: 0 auto 30px auto;
+    background: #f7f1e9;
+    border: 1px dashed var(--border-color);
+    padding: 24px;
+    border-radius: var(--radius-md);
+    box-sizing: border-box;
+}
+.prompt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+.prompt-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary);
+}
+.copy-btn {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    padding: 8px 16px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main);
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+.copy-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+.copy-btn.success {
+    background-color: var(--hint-both);
+    color: white;
+    border-color: var(--hint-both);
+}
+.prompt-content {
+    width: 100%;
+    height: 100px;
+    font-size: 13px;
+    font-family: monospace;
+    color: #5c5246;
+    background: #FFFDFB;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+/* 🎯 저장 승인 모달 대화상자 (Save Dialog Modal) */
+.word-save-dialog {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(46, 38, 31, 0.4);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    padding: 20px;
+}
+.word-save-dialog.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+.word-save-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    width: 100%;
+    max-width: 350px;
+    box-shadow: 0 15px 35px rgba(46, 38, 31, 0.18);
+    transform: scale(0.95);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.word-save-dialog.show .word-save-card {
+    transform: scale(1);
+}
+.word-save-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+}
+.danger-label {
+    color: var(--danger);
+}
+.word-save-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
+}
+.word-save-meta {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+}
+.word-save-message {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--text-main);
+    margin-bottom: 24px;
+}
+.word-save-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+.word-save-actions button {
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+}
+.word-save-cancel {
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color) !important;
+}
+.word-save-cancel:hover {
+    background-color: rgba(46, 38, 31, 0.03);
+    color: var(--text-main);
+}
+.word-save-confirm {
+    background-color: var(--primary);
+    color: white;
+}
+.word-save-confirm:hover {
+    background-color: var(--primary-hover);
+}
+.word-clear-confirm {
+    background-color: var(--danger);
+    color: white;
+}
+.word-clear-confirm:hover {
+    background-color: #9d3232;
+}
+
+/* 🎯 모바일 반응형 커스텀 토스트 알림창 스타일 */
+.custom-toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background-color: rgba(46, 38, 31, 0.95);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: #FFFDFB;
+    padding: 14px 28px;
+    border-radius: 30px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    min-width: 280px;
+    max-width: 90%;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.custom-toast.error-toast {
+    background-color: rgba(184, 64, 64, 0.95);
+}
+.custom-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
