@@ -236,6 +236,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
             setSyncStatus(`${session.userId}의 단어장에 로그인했습니다. 변경 사항은 자동 저장됩니다.`);
             showToast('단어장을 불러왔습니다.');
         } catch (error) {
+            console.error('Firebase wordbook load failed:', error);
             const message = getSyncErrorMessage(error);
             setSyncStatus(message);
             showToast(message, true);
@@ -327,6 +328,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
             setSyncStatus('로컬 단어장과 서버 단어장이 다릅니다.');
             syncConfirmDialog.open();
         } catch (error) {
+            console.error('Firebase sync check failed:', error);
             const message = getSyncErrorMessage(error);
             setSyncStatus(message);
             showToast(message, true);
@@ -344,6 +346,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
             setSyncStatus(`${syncSession?.userId || '단어장'} 서버에 현재 상태를 업로드했습니다.`);
             showToast('현재 단어장을 서버에 저장했습니다.');
         } catch (error) {
+            console.error('Firebase wordbook upload failed:', error);
             const message = getSyncErrorMessage(error);
             setSyncStatus(message);
             showToast(message, true);
@@ -442,6 +445,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
             saveCurrentDictionaryToFirebase()
                 .then(() => setSyncStatus(`${syncSession?.userId || '단어장'} 자동 저장 완료`))
                 .catch((error) => {
+                    console.error('Firebase autosave failed:', error);
                     const message = getSyncErrorMessage(error);
                     setSyncStatus(message);
                     showToast(message, true);
@@ -513,6 +517,8 @@ document.addEventListener('DOMContentLoaded', (): void => {
             return '동기화 중 알 수 없는 문제가 발생했습니다.';
         }
 
+        const code = (error as { code?: string }).code;
+
         if (error.message === 'not_found') {
             return '이 ID로 저장된 단어장이 아직 없습니다.';
         }
@@ -529,7 +535,19 @@ document.addEventListener('DOMContentLoaded', (): void => {
             return '먼저 단어장에 로그인해 주세요.';
         }
 
-        return 'Firebase 연결에 실패했습니다. 설정값과 Firestore 규칙을 확인해 주세요.';
+        if (code === 'auth/operation-not-allowed' || code === 'auth/admin-restricted-operation') {
+            return 'Firebase Authentication에서 익명 로그인을 켜 주세요.';
+        }
+
+        if (code === 'permission-denied') {
+            return 'Firestore 규칙이 아직 사이트 방식과 맞지 않습니다. 수정한 firestore.rules를 배포해 주세요.';
+        }
+
+        if (code === 'auth/network-request-failed' || code === 'unavailable') {
+            return 'Firebase 서버에 연결하지 못했습니다. 인터넷 연결 또는 차단 설정을 확인해 주세요.';
+        }
+
+        return `Firebase 연결에 실패했습니다. (${code || error.message})`;
     }
 
     function updateSyncAvailability(): void {

@@ -101,9 +101,8 @@ if (entryLink && dialog && form && cancelBtn && userIdInput && passwordInput && 
       
       window.location.href = entryLink.href;
     } catch (error) {
-      setStatus(error instanceof Error && error.message === 'wrong_password'
-        ? '비밀번호가 맞지 않습니다.'
-        : 'Firebase 연결에 실패했습니다. 설정값과 Firestore 규칙을 확인해 주세요.');
+      console.error('Firebase wordbook login failed:', error);
+      setStatus(getHomeFirebaseErrorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -184,6 +183,31 @@ async function loadFirebase(): Promise<FirebaseModuleWrapper> {
     setDoc: firestoreModule.setDoc,
     signInAnonymously: authModule.signInAnonymously // 🔒 [안전 패치] 익명로그인 함수 바인딩
   };
+}
+
+function getHomeFirebaseErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'Firebase 연결 중 알 수 없는 문제가 발생했습니다.';
+  }
+
+  const code = (error as { code?: string }).code;
+  if (error.message === 'wrong_password') {
+    return '비밀번호가 맞지 않습니다.';
+  }
+
+  if (code === 'auth/operation-not-allowed' || code === 'auth/admin-restricted-operation') {
+    return 'Firebase Authentication에서 익명 로그인을 켜 주세요.';
+  }
+
+  if (code === 'permission-denied') {
+    return 'Firestore 규칙이 아직 사이트 방식과 맞지 않습니다. 수정한 firestore.rules를 배포해 주세요.';
+  }
+
+  if (code === 'auth/network-request-failed' || code === 'unavailable') {
+    return 'Firebase 서버에 연결하지 못했습니다. 인터넷 연결 또는 차단 설정을 확인해 주세요.';
+  }
+
+  return `Firebase 연결에 실패했습니다. (${code || error.message})`;
 }
 
 async function createPasswordHash(password: string): Promise<string> {
