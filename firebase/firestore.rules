@@ -19,7 +19,8 @@ service cloud.firestore {
         && request.resource.data.updatedAt is string;
 
       allow delete: if request.auth != null
-        && userId.matches('^[a-zA-Z0-9_-]{3,40}$')
+        && isWordbookId(userId)
+        && resource != null 
         && resource.data.ownerId == userId;
     }
 

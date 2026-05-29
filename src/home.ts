@@ -42,33 +42,32 @@ const userIdInput = document.getElementById('home-sync-user-id') as HTMLInputEle
 const passwordInput = document.getElementById('home-sync-password') as HTMLInputElement | null;
 const statusEl = document.getElementById('home-login-status') as HTMLElement | null;
 
-// DOM 요소가 정상적으로 존재할 때만 이벤트 리스너를 바인딩합니다.
 if (entryLink && dialog && form && cancelBtn && userIdInput && passwordInput && statusEl) {
   
-  // 단어장 들어가기 링크를 눌렀을 때의 동작
   entryLink.addEventListener('click', (event: MouseEvent) => {
     event.preventDefault();
 
-    // 1. localStorage에서 기존 로그인 세션이 있는지 확인합니다.
-    const savedSession = localStorage.getItem(SESSION_KEY);
+    const savedSession = sessionStorage.getItem(SESSION_KEY);
     if (savedSession) {
       try {
         const session = JSON.parse(savedSession);
-        if (
-          typeof session.userId === 'string'
-          && typeof session.passwordHash === 'string'
-          && /^[a-f0-9]{64}$/.test(session.passwordHash)
-        ) {
-          // 2. 이미 로그인 기록이 있다면 팝업을 띄우지 않고 바로 단어장으로 이동합니다.
+        if (session && typeof session.userId === 'string' && typeof session.passwordHash === 'string') {
+          
+          console.log(`%c[Auto Login Bypass] 이미 보관 중인 세션을 감지하여 즉시 로그인 처리를 수행합니다.`, 'background: #222; color: #bada55; font-size: 12px; padding: 3px;');
+          console.log(` -> 🔑 세션 복원 ID: %c${session.userId}`, 'color: #ffc107; font-weight: bold; font-size: 13px;');
+          console.log(` -> 📦 전송 패킷 스냅샷:`, session);
+
+          // 🌟 [대기 제거] 1초 대기 없이 즉시 페이지 이동
           window.location.href = entryLink.href;
           return; 
         }
       } catch (e) {
-        localStorage.removeItem(SESSION_KEY);
+        console.error('[Auto Login Error] 세션 파싱에 실패하여 더미 데이터를 만료 처리합니다.');
+        sessionStorage.removeItem(SESSION_KEY);
       }
     }
 
-    // 3. 만약 로그인 기록이 없다면 기존처럼 로그인 팝업창을 열어줍니다.
+    console.log('[Auth Required] 유효한 브라우저 세션 데이터가 없습니다. 로그인 다이얼로그 창을 활성화합니다.');
     openLogin();
   });
 
@@ -93,26 +92,53 @@ if (entryLink && dialog && form && cancelBtn && userIdInput && passwordInput && 
       return;
     }
 
+    const savedSessionRaw = sessionStorage.getItem(SESSION_KEY);
+    if (savedSessionRaw) {
+      try {
+        const savedSession = JSON.parse(savedSessionRaw);
+        const inputPasswordHash = await createPasswordHash(userId, password);
+        if (savedSession.userId === userId && savedSession.passwordHash === inputPasswordHash) {
+          console.log(`[Auth Check] 폼 입력값이 현재 sessionStorage에 저장된 정보와 일치합니다. (ID: ${userId})`);
+        } else {
+          console.warn(`[Auth Check] 입력 정보가 현재 세션 정보와 다릅니다. (입력 ID: ${userId} / 세션 ID: ${savedSession.userId})`);
+        }
+      } catch (e) {
+        console.error('[Auth Check] 세션 데이터 파싱 실패:', e);
+      }
+    } else {
+      console.log('[Auth Check] 현재 브라우저 세션스토리지에 저장된 로그인 데이터가 없습니다. (최초 로그인/가입 시도)');
+    }
+
     setStatus('로그인 중...');
     setBusy(true);
 
     try {
       const passwordHash = await createPasswordHash(userId, password);
+      
       await verifyOrCreateWordbook(userId, passwordHash);
       
-      // 로그인 유지에는 해시된 계정 정보만 저장합니다. 원문 비밀번호는 저장하지 않습니다.
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ userId, passwordHash }));
+      console.log(`[Server Sync] Firebase 서버 검증 완료. 단어장 세션을 세션스토리지에 저장합니다. (ID: ${userId})`);
+
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ userId, passwordHash }));
       
+      console.log('[Session Verified]', JSON.parse(sessionStorage.getItem(SESSION_KEY) || '{}'));
+
+      console.log(`[Login Redirect] 🚀 인증 완료! 어떤 로그인 정보로 이동하는지 로그를 남깁니다.`);
+      console.log(` -> 🔑 로그인 시도 성공 계정 ID: %c${userId}`, 'color: #007bff; font-weight: bold; font-size: 14px;');
+      console.log(` -> 📦 전송될 세션 패킷:`, JSON.parse(sessionStorage.getItem(SESSION_KEY) || '{}'));
+
+      // 🌟 [대기 제거] 0.8초 대기 없이 인증 확인 즉시 페이지 진입시킵니다.
       window.location.href = entryLink.href;
+
     } catch (error) {
-      console.error('Firebase wordbook login failed:', error);
+      console.error('[Server Error] Firebase wordbook 인증 또는 네트워크 연결에 실패했습니다.', error);
       setStatus(getHomeFirebaseErrorMessage(error));
+      sessionStorage.removeItem(SESSION_KEY);
     } finally {
       setBusy(false);
     }
   });
 
-  // 💡 상위 if문 스코프 덕분에 내부에서는 안전하게 null이 아님이 보장됩니다.
   function openLogin(): void {
     dialog!.classList.add('show');
     dialog!.setAttribute('aria-hidden', 'false');
@@ -122,6 +148,7 @@ if (entryLink && dialog && form && cancelBtn && userIdInput && passwordInput && 
   function closeLogin(): void {
     dialog!.classList.remove('show');
     dialog!.setAttribute('aria-hidden', 'true');
+    setStatus('');
   }
 
   function setStatus(message: string): void {
@@ -133,13 +160,11 @@ if (entryLink && dialog && form && cancelBtn && userIdInput && passwordInput && 
       (element as HTMLButtonElement | HTMLInputElement).disabled = isBusy;
     });
   }
-
 }
 
 async function verifyOrCreateWordbook(userId: string, passwordHash: string): Promise<void> {
   const firebase = await loadFirebase();
   
-  // 🔒 [안전 패치] 데이터 조회/생성 전에 임시 익명 토큰 발행하여 규칙 통과 준비
   await firebase.signInAnonymously(firebase.auth);
 
   const documentRef = firebase.doc(firebase.db, 'wordbooks', userId);
@@ -165,29 +190,34 @@ async function verifyOrCreateWordbook(userId: string, passwordHash: string): Pro
   await firebase.setDoc(documentRef, newWordbook);
 }
 
-// URL 변수 분리 방식을 적용하여 TypeScript 컴파일 에러(Cannot find module)를 방지합니다.
 async function loadFirebase(): Promise<FirebaseModuleWrapper> {
   const configModule = await import(CONFIG_URL) as FirebaseConfig;
   
   const APP_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
   const FIRESTORE_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
-  const AUTH_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js'; // 🔒 [안전 패치] Auth 모듈 주소 정의
+  const AUTH_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js'; 
 
-  const appModule = await import(/* @vite-ignore */ APP_URL) as any;
-  const firestoreModule = await import(/* @vite-ignore */ FIRESTORE_URL) as any;
-  const authModule = await import(/* @vite-ignore */ AUTH_URL) as any; // 🔒 [안전 패치] Auth 모듈 동적 Import
-  
-  const apps = appModule.getApps();
-  const app = apps.length > 0 ? apps[0] : appModule.initializeApp(configModule.firebaseConfig);
+  try {
+    const appModule = await import(/* @vite-ignore */ APP_URL) as any;
+    const firestoreModule = await import(/* @vite-ignore */ FIRESTORE_URL) as any;
+    const authModule = await import(/* @vite-ignore */ AUTH_URL) as any; 
+    
+    const apps = appModule.getApps();
+    const app = apps.length > 0 ? apps[0] : appModule.initializeApp(configModule.firebaseConfig);
 
-  return {
-    db: firestoreModule.getFirestore(app),
-    auth: authModule.getAuth(app), // 🔒 [안전 패치] Auth 인스턴스 할당
-    doc: firestoreModule.doc,
-    getDoc: firestoreModule.getDoc,
-    setDoc: firestoreModule.setDoc,
-    signInAnonymously: authModule.signInAnonymously // 🔒 [안전 패치] 익명로그인 함수 바인딩
-  };
+    return {
+      db: firestoreModule.getFirestore(app),
+      auth: authModule.getAuth(app), 
+      doc: firestoreModule.doc,
+      getDoc: firestoreModule.getDoc,
+      setDoc: firestoreModule.setDoc,
+      signInAnonymously: authModule.signInAnonymously 
+    };
+  } catch (importError) {
+    const customError = new Error('unavailable');
+    (customError as any).code = 'unavailable';
+    throw customError;
+  }
 }
 
 function getHomeFirebaseErrorMessage(error: unknown): string {

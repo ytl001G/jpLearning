@@ -511,36 +511,65 @@ h2::after {
 
 .add-word-form {
     display: grid;
-    grid-template-columns: 1.1fr 1fr 1.2fr auto;
-    gap: 10px;
-    margin-bottom: 22px;
-    padding: 14px;
-    border: 1px solid var(--line);
+    grid-template-columns: 1fr 1fr 1.2fr auto;
+    gap: 12px;
+    margin: 24px 0;
+    padding: 20px;
+    border: 1px solid var(--line-strong);
     border-radius: var(--radius-md);
-    background: rgba(255, 255, 255, 0.78);
-    box-shadow: var(--shadow-sm);
+    background: #ffffff;
+    /* 깊이감을 주기 위해 기존 shadow-sm 대신 살짝 투명도를 머금은 md급 섀도우 적용 */
+    box-shadow: 0 8px 24px rgba(111, 75, 46, 0.04), var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
 }
 
+/* 책갈피/노트 같은 느낌을 주는 왼쪽 포인트 브라운 선 가상 요소 */
+.add-word-form::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--primary), var(--accent));
+}
+
+/* 입력창 내부 스타일 정밀 세공 */
 .add-word-form input {
     min-width: 0;
-    padding: 12px 13px;
+    height: 44px; /* 높이를 살짝 키워 안정감 확보 */
+    padding: 10px 14px;
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
-    background: #ffffff;
+    background: var(--bg-reader); /* 은은한 미색 배경으로 눈의 피로도 감소 */
     color: var(--ink);
     font-family: var(--serif-font);
     font-size: 14px;
+    font-weight: 500;
     outline: none;
-    transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+    /* 포커스 시 부드러운 전환 효과 */
+    transition: border-color 0.24s var(--ease), background-color 0.24s var(--ease), box-shadow 0.24s var(--ease);
 }
 
+/* 플레이스홀더를 조금 더 고급스러운 서체 느낌의 색상으로 튜닝 */
 .add-word-form input::placeholder {
     color: var(--faint);
+    font-family: var(--ui-font);
+    font-size: 13px;
+    opacity: 0.8;
 }
 
+/* 마우스를 올렸을 때 테두리를 살짝 선명하게 */
+.add-word-form input:hover {
+    border-color: var(--line-strong);
+}
+
+/* 🌟 포커스(선택) 되었을 때 고급스러운 브라운 음영과 메인 컬러 테두리 안착 */
 .add-word-form input:focus {
-    border-color: rgba(49, 92, 79, 0.46);
-    box-shadow: 0 0 0 3px rgba(111, 75, 46, 0.1);
+    border-color: var(--primary);
+    background: #ffffff;
+    box-shadow: 0 0 0 4px rgba(111, 75, 46, 0.08);
 }
 
 .sm-add-btn {
@@ -597,9 +626,12 @@ h2::after {
     pointer-events: none;
 }
 
+/* ==========================================================================
+   ✨ [정밀 패치] 정렬 드롭다운 무조건 호버(Hover) & 옛날 스르륵 연출 연동 
+   ========================================================================== */
 .sort-dropdown {
     position: relative;
-    z-index: 20;
+    z-index: 1000; /* 단어 리스트 아이템 위로 쾌적하게 얹어지도록 레이어 최적화 */
     width: 132px;
     font-family: var(--ui-font);
 }
@@ -621,7 +653,9 @@ h2::after {
     font-size: 13px;
     font-weight: 900;
     box-shadow: var(--shadow-sm);
-    transition: transform 0.22s var(--ease), box-shadow 0.22s var(--ease), border-color 0.22s var(--ease);
+    
+    /* 🌟 [수정] 마우스가 나갈 때 화살표와 버튼 원래대로 돌아가는 속도도 메뉴가 사라지는 시간과 맞춰줍니다. */
+    transition: transform 0.22s var(--ease) 0.25s, box-shadow 0.22s var(--ease) 0.25s, border-color 0.22s var(--ease) 0.25s;
 }
 
 .sort-dropdown-trigger::after {
@@ -631,44 +665,68 @@ h2::after {
     border-right: 2px solid var(--primary);
     border-bottom: 2px solid var(--primary);
     transform: rotate(45deg) translateY(-2px);
-    transition: transform 0.24s var(--ease);
+    
+    /* 🌟 [수정] 나갈 때 화살표가 다시 뒤집히는 타이밍에 지연(0.25s)을 줍니다. */
+    transition: transform 0.24s var(--ease) 0.25s;
 }
 
-.sort-dropdown.open .sort-dropdown-trigger,
+/* 🌟 [수정] 마우스를 올리는(Hover) 순간에는 딜레이 없이 즉시(0s) 애니메이션이 켜지도록 오버라이딩 */
+.sort-dropdown:hover .sort-dropdown-trigger,
 .sort-dropdown-trigger:hover {
     border-color: var(--line-strong);
     box-shadow: var(--shadow-md);
     transform: translateY(-1px);
+    transition-delay: 0s;
 }
 
-.sort-dropdown.open .sort-dropdown-trigger::after {
+/* 🌟 [수정] 올릴 때는 화살표가 즉시(0s) 뒤집히도록 연동 */
+.sort-dropdown:hover .sort-dropdown-trigger::after {
     transform: rotate(225deg) translate(-2px, -1px);
+    transition-delay: 0s;
 }
 
 .sort-dropdown-menu {
     position: absolute;
-    top: calc(100% + 4px);
+    top: 100%; 
     right: 0;
     width: 156px;
-    display: flex;
+    display: flex !important;
     flex-direction: column;
     gap: 4px;
-    padding: 7px;
+    
+    /* 🌟 [수정] 사방 패딩을 넉넉히 주어 마우스가 조금만 빗겨 나가도 메뉴 내부에 있는 것으로 판정하게 만듭니다. */
+    padding: 14px 10px 10px 10px; 
+    
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: rgba(255, 255, 255, 0.98);
     box-shadow: var(--shadow-lg);
     opacity: 0;
     pointer-events: none;
-    transform: translateY(-8px) scale(0.98);
+    transform: translateY(-4px) scale(0.98);
     transform-origin: top right;
-    transition: opacity 0.22s var(--ease), transform 0.22s var(--ease);
+    transition: opacity 0.22s var(--ease) 0.25s, transform 0.22s var(--ease) 0.25s;
 }
 
-.sort-dropdown.open .sort-dropdown-menu {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateY(0) scale(1);
+/* 🌟 [신규 추가] 버튼과 메뉴 사이의 보이지 않는 공중 틈새를 투명한 가상 벽(Before)으로 완전히 메웁니다. */
+.sort-dropdown-menu::before {
+    content: "";
+    position: absolute;
+    top: -15px; /* 🌟 메뉴판 위쪽으로 15px만큼 투명 다리를 뻗어 호버 끊김을 완벽 차단 */
+    left: 0;
+    width: 100%;
+    height: 15px;
+    background: transparent;
+}
+
+/* 드롭다운 영역 호버 시 옛날 애니메이션 속성을 깨워 스르륵 전개 */
+.sort-dropdown:hover .sort-dropdown-menu {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform: translateY(4px) scale(1) !important; /* 투명 패딩 공간만큼 부드럽게 안착 */
+    
+    /* 🌟 [핵심] 마우스를 올릴 때는 딜레이 시간을 0초(0s)로 초기화하여 버벅임 없이 즉시 열리게 만듭니다. */
+    transition-delay: 0s !important;
 }
 
 .sort-dropdown-option {
@@ -695,6 +753,8 @@ h2::after {
 .sort-dropdown-option:hover {
     transform: translateX(2px);
 }
+
+/* ========================================================================== */
 
 .wordbook-list {
     display: flex;
@@ -810,25 +870,48 @@ h2::after {
     height: 38px;
 }
 
-.remove-btn {
-    min-width: 34px;
-    height: 34px;
-    padding: 0 9px;
-    border: 1px solid transparent;
-    border-radius: 999px;
-    background: transparent;
-    color: var(--muted);
+.wordbook-item .remove-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background-color: transparent; 
+    color: var(--ink-sub, #868e96);
     cursor: pointer;
-    font-family: var(--ui-font);
-    font-size: 14px;
-    font-weight: 900;
-    transition: background-color 0.2s var(--ease), color 0.2s var(--ease), border-color 0.2s var(--ease);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px; 
+    line-height: 1;  
+    font-family: Arial, sans-serif; 
+    transition: background-color 0.18s ease, color 0.18s ease;
 }
 
-.remove-btn:hover {
-    border-color: rgba(176, 75, 84, 0.18);
-    background: rgba(176, 75, 84, 0.08);
-    color: var(--danger);
+.wordbook-item .remove-btn:hover {
+    background-color: var(--danger-soft, #ffe3e3); 
+    color: var(--danger, #e63946);                 
+}
+
+#clear-all-btn {
+    width: auto !important;
+    height: auto !important;
+    border-radius: 6px !important;
+    padding: 6px 12px !important;
+    background-color: transparent !important;
+    color: var(--danger, #e63946) !important;
+    border: 1px solid var(--danger, #e63946) !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+#clear-all-btn:hover {
+    background-color: var(--danger, #e63946) !important;
+    color: #ffffff !important; 
 }
 
 .prompt-box {
@@ -1139,4 +1222,58 @@ h2::after {
         display: block;
         margin: 3px 0 0;
     }
+
+    .sort-dropdown:hover .sort-dropdown-menu {
+        display: flex !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        transform: translateY(4px) scale(1) !important;
+    }
+}
+.word-save-card {
+    text-align: left; /* 가운데 정렬에서 좌측 정렬로 변경하여 사전 느낌 강조 */
+}
+
+/* 첫 번째 스크린샷 느낌을 재현한 미색 요약 박스 */
+.dialog-preview-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 18px;
+    background: var(--bg-reader, #fffaf1);
+    border: 1px solid var(--line, #e5d8c8);
+    border-radius: var(--radius-sm, 6px);
+    margin: 12px 0 18px 0;
+    font-family: var(--serif-font);
+}
+
+.dialog-checkbox-icon {
+    color: var(--faint, #a99a8b);
+    font-size: 16px;
+    margin-right: 2px;
+}
+
+.dialog-word-text {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ink, #30271f);
+}
+
+.dialog-word-kana {
+    font-size: 15px;
+    color: var(--hint-kana, #2b6f86);
+    font-weight: 500;
+}
+
+.dialog-word-mean {
+    font-size: 16px;
+    color: var(--muted, #776b60);
+    margin-left: 4px;
+}
+
+.word-save-message {
+    font-family: var(--ui-font);
+    font-size: 13px;
+    color: var(--faint);
+    margin-bottom: 16px;
 }

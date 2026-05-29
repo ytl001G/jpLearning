@@ -3,19 +3,23 @@ const PUNCTUATION = new Set([
     '。', '、', '「', '」', '『', '』', '.', ',', '"', "'", '“', '”',
     '‘', '’', '(', ')', '！', '？', '!', '?', '：', ':', ';', '—', '-'
 ]);
-export function renderReader(words, viewerArea, onSaveRequest, savedWords = []) {
-    // 🌟 [개선] 단어 텍스트 대신 '순서(인덱스)'를 기반으로 개별 단어의 stage 상태를 백업합니다.
+export function renderReader(words, viewerArea, onSaveRequest, savedWords = [], // 💡 유연한 타입 지원 유지
+resetStages = false // 🌟 [추가] 상태를 강제로 초기화할지 결정하는 플래그
+) {
     const stageBackup = {};
-    const existingSpans = viewerArea.querySelectorAll('span.playable');
-    existingSpans.forEach((el, index) => {
-        const span = el;
-        const stageVal = span.dataset.stage || '0';
-        if (stageVal !== '0') {
-            stageBackup[index] = stageVal; // 예: { 3: "1" } -> 4번째 단어가 1단계 상태임 의미
-        }
-    });
+    // 🌟 resetStages가 false일 때만 기존에 열려있던 단어 단계(Stage)를 기억합니다.
+    if (!resetStages) {
+        const existingSpans = viewerArea.querySelectorAll('span.playable');
+        existingSpans.forEach((el, index) => {
+            const span = el;
+            const stageVal = span.dataset.stage || '0';
+            if (stageVal !== '0') {
+                stageBackup[index] = stageVal;
+            }
+        });
+    }
     viewerArea.innerHTML = '';
-    let playableIndex = 0; // 🌟 playable 요소들의 순서를 매기기 위한 고유 카운터
+    let playableIndex = 0;
     words.forEach((wordData) => {
         const [type, text, kana, original, originalKana, contextMean, mean] = wordData;
         const pronunciation = kana || '';
@@ -39,13 +43,11 @@ export function renderReader(words, viewerArea, onSaveRequest, savedWords = []) 
             return;
         }
         span.classList.add('playable');
-        // 🌟 [개선] 백업해둔 고유 순서(인덱스)의 stage 단계를 정확히 매칭하여 복원합니다.
-        const savedStage = stageBackup[playableIndex] || '0';
+        // 🌟 초기화 플래그가 켜졌다면 무조건 '0'단계(숨김), 아니라면 백업된 단계를 불러옵니다.
+        const savedStage = resetStages ? '0' : (stageBackup[playableIndex] || '0');
         span.dataset.stage = savedStage;
-        // 복원된 stage 단계에 맞게 UI 클래스와 힌트 텍스트 복구하기
         const isPronunciationOmitted = !pronunciation.trim() || text === pronunciation;
         restoreStageUI(span, Number.parseInt(savedStage, 10), isPronunciationOmitted, type, pronunciation, displayMean);
-        // 🌟 복원 처리가 끝난 뒤 카운터를 증가시킵니다.
         playableIndex++;
         span.addEventListener('click', function () {
             let stage = Number.parseInt(this.dataset.stage || '0', 10);
@@ -98,9 +100,6 @@ export function renderReader(words, viewerArea, onSaveRequest, savedWords = []) 
         viewerArea.appendChild(span);
     });
 }
-/**
- * 🌟 [헬퍼 함수] 복원된 stage에 맞춰 span 요소의 디자인 상태를 원복해 줍니다.
- */
 function restoreStageUI(span, stage, isPronunciationOmitted, type, pronunciation, displayMean) {
     if (stage === 0) {
         span.dataset.hint = '';
@@ -124,45 +123,43 @@ function restoreStageUI(span, stage, isPronunciationOmitted, type, pronunciation
         }
     }
 }
-export function renderWordbook(container, words, onRemove) {
+export function renderWordbook(wordList, container, onRemoveRequest) {
     container.innerHTML = '';
-    if (words.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'wordbook-empty';
-        empty.textContent = '저장된 단어가 없습니다.';
-        container.appendChild(empty);
+    if (wordList.length === 0) {
+        container.innerHTML = `<div class="wordbook-empty">저장된 단어가 없습니다.</div>`;
         return;
     }
-    words.forEach((item) => {
-        const div = document.createElement('div');
-        div.className = 'wordbook-item';
-        const body = document.createElement('div');
-        const jp = document.createElement('span');
-        const meta = document.createElement('span');
-        const actions = document.createElement('div');
-        const ttsBtn = document.createElement('button');
+    wordList.forEach((item) => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'wordbook-item';
+        const bodyEl = document.createElement('div');
+        bodyEl.className = 'wordbook-body';
+        const jpSpan = document.createElement('span');
+        jpSpan.className = 'jp';
+        jpSpan.textContent = item.text;
+        const metaSpan = document.createElement('span');
+        metaSpan.className = 'meta';
+        const kanaPart = item.kana ? `[${item.kana}] ` : '';
+        metaSpan.textContent = `${kanaPart}${item.mean}`;
+        // 일본어 단어와 뜻 정보만 순서대로 추가합니다.
+        bodyEl.appendChild(jpSpan);
+        bodyEl.appendChild(metaSpan);
+        const actionsEl = document.createElement('div');
+        actionsEl.className = 'wordbook-actions';
         const removeBtn = document.createElement('button');
-        body.className = 'wordbook-body';
-        jp.className = 'jp';
-        jp.textContent = item.text;
-        meta.className = 'meta';
-        meta.textContent = item.kana ? `(${item.kana}) [${item.mean}]` : `[${item.mean}]`;
-        actions.className = 'wordbook-actions';
-        ttsBtn.className = 'tts-btn';
-        ttsBtn.type = 'button';
-        ttsBtn.innerHTML = speakerIconSvg();
-        ttsBtn.setAttribute('aria-label', `${item.text} 발음 듣기`);
-        ttsBtn.title = '발음 듣기';
-        ttsBtn.addEventListener('click', () => playJapaneseTts(item.text, ttsBtn));
-        removeBtn.className = 'remove-btn';
         removeBtn.type = 'button';
-        removeBtn.textContent = '✕';
-        removeBtn.addEventListener('click', () => onRemove(item.text));
-        body.append(jp, meta);
-        actions.append(ttsBtn, removeBtn);
-        div.append(body, actions);
-        container.appendChild(div);
+        removeBtn.className = 'remove-btn';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.addEventListener('click', () => onRemoveRequest(item.text));
+        actionsEl.appendChild(removeBtn);
+        itemEl.appendChild(bodyEl);
+        itemEl.appendChild(actionsEl);
+        container.appendChild(itemEl);
     });
+    const sortSelectEl = document.getElementById('sort-select');
+    if (sortSelectEl) {
+        sortSelectEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
 }
 function playJapaneseTts(text, triggerButton) {
     const query = text.trim();
@@ -217,6 +214,7 @@ export class StudyCard {
     index = 0;
     words = [];
     ttsBtn;
+    static instance = null;
     constructor(cardJp, cardHint, cardCounter, cardCtrls, cardPrev, cardNext) {
         this.cardJp = cardJp;
         this.cardHint = cardHint;
@@ -240,6 +238,22 @@ export class StudyCard {
         this.cardHint.addEventListener('click', () => this.reveal());
         this.cardPrev.addEventListener('click', () => this.move(-1));
         this.cardNext.addEventListener('click', () => this.move(1));
+    }
+    static init(words) {
+        if (!this.instance) {
+            const cardJp = document.getElementById('card-jp');
+            const cardHint = document.getElementById('card-hint');
+            const cardCounter = document.getElementById('card-counter');
+            const cardCtrls = document.getElementById('card-ctrls');
+            const cardPrev = document.getElementById('card-prev');
+            const cardNext = document.getElementById('card-next');
+            if (cardJp && cardHint && cardCounter && cardCtrls && cardPrev && cardNext) {
+                this.instance = new StudyCard(cardJp, cardHint, cardCounter, cardCtrls, cardPrev, cardNext);
+            }
+        }
+        if (this.instance) {
+            this.instance.setWords(words);
+        }
     }
     setWords(words) {
         this.words = words;
@@ -281,20 +295,27 @@ export class StudyCard {
         this.render();
     }
 }
-export function createSaveDialog(onConfirm) {
-    let pendingWord = null;
+export function createSaveDialog(word, onConfirm) {
     const dialog = document.createElement('div');
     dialog.className = 'word-save-dialog';
     dialog.setAttribute('aria-hidden', 'true');
+    // 요미가나(발음)가 있으면 괄호 서식 추가
+    const kanaBadge = word.kana ? ` <span class="dialog-word-kana">[${word.kana}]</span>` : '';
     dialog.innerHTML = `
-        <div class="word-save-card" role="dialog" aria-modal="true" aria-labelledby="word-save-title">
-            <div class="word-save-label">단어 안내</div>
-            <div class="word-save-title" id="word-save-title"></div>
-            <div class="word-save-meta"></div>
-            <div class="word-save-message">이 단어를 모르는 단어장에 보관할까요?</div>
+        <div class="word-save-card" role="dialog" aria-modal="true" aria-labelledby="save-dialog-title">
+            <div class="word-save-label">단어장 저장 확인</div>
+            
+            <div class="dialog-preview-box">
+                <span class="dialog-checkbox-icon">❑</span>
+                <span class="dialog-word-text" id="save-dialog-title">${word.text}</span>
+                ${kanaBadge}
+                <span class="dialog-word-mean">${word.mean}</span>
+            </div>
+            
+            <div class="word-save-message">이 단어를 단어장에 보관할까요?</div>
             <div class="word-save-actions">
-                <button type="button" class="word-save-cancel">나중에</button>
-                <button type="button" class="word-save-confirm">보관하기</button>
+                <button type="button" class="word-save-cancel">취소</button>
+                <button type="button" class="word-save-confirm">저장하기</button>
             </div>
         </div>
     `;
@@ -302,30 +323,26 @@ export function createSaveDialog(onConfirm) {
     const cancelBtn = dialog.querySelector('.word-save-cancel');
     const confirmBtn = dialog.querySelector('.word-save-confirm');
     const close = () => {
+        dialog.classList.add('hide'); // 부드러운 아웃 애니메이션용 (선택)
         dialog.classList.remove('show');
         dialog.setAttribute('aria-hidden', 'true');
-        pendingWord = null;
+        setTimeout(() => dialog.remove(), 250);
     };
-    cancelBtn.addEventListener('click', close);
-    dialog.addEventListener('click', (event) => {
-        if (event.target === dialog)
-            close();
-    });
-    confirmBtn.addEventListener('click', () => {
-        if (pendingWord)
-            onConfirm(pendingWord);
-        close();
-    });
-    const open = (word) => {
-        pendingWord = word;
-        const title = dialog.querySelector('.word-save-title');
-        const meta = dialog.querySelector('.word-save-meta');
-        title.textContent = word.text;
-        meta.textContent = word.kana ? `${word.kana} · ${word.mean}` : word.mean;
+    const open = () => {
         dialog.classList.add('show');
         dialog.setAttribute('aria-hidden', 'false');
         confirmBtn.focus();
     };
+    cancelBtn.addEventListener('click', close);
+    // 🌟 인풋값이 없으므로 원본 사전형 데이터(word)를 그대로 콜백에 태워 보냅니다.
+    confirmBtn.addEventListener('click', () => {
+        close();
+        onConfirm(word);
+    });
+    dialog.addEventListener('click', (event) => {
+        if (event.target === dialog)
+            close();
+    });
     return { open, close };
 }
 export function createClearDialog(onConfirm) {

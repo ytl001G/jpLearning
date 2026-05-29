@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" href="data:;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>일본어 독서대 & 단어장</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap" rel="stylesheet">
@@ -14,7 +15,6 @@
 
 <div id="tab-reader" class="page-content active">
     <div class="container">
-        <!-- 💡 독서대 홈 버튼 -->
         <div class="reader-top-actions">
             <a class="home-link" href="../">Home</a>
         </div>
@@ -92,7 +92,13 @@
                 <button class="remove-btn" id="clear-all-btn">전체 삭제</button>
             </div>
         </div>
-        
+
+        <div class="prompt-generation-bar" style="margin: 15px 0; text-align: right;">
+            <button type="button" class="btn start-btn" id="copy-unknown-prompt-btn" style="margin: 0; padding: 10px 16px; font-size: 0.9rem; width: 100%;">
+                모르는 단어 복습 지문 프롬프트 복사 📋
+            </button>
+        </div>
+
         <div class="wordbook-list" id="wordbook-list-container"></div>
     </div>
 </div>

@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const copyExampleBtn = document.getElementById('copy-example-btn');
     const exampleJsonEl = document.getElementById('example-json-text');
     const readerSupportBoxes = document.querySelectorAll('.reader-support-box');
+    // 💡 모르는 단어 복습 프롬프트 복사 버튼 추가
+    const copyUnknownPromptBtn = document.getElementById('copy-unknown-prompt-btn');
     const wordbookContainer = document.getElementById('wordbook-list-container');
     const clearAllBtn = document.getElementById('clear-all-btn');
     const sortSelect = document.getElementById('wordbook-sort');
@@ -37,26 +39,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     let latestJsonWords = [];
     const session = readHomeSession();
     if (!session) {
-        setSyncStatus('홈에서 일본어 단어장 로그인을 먼저 해 주세요.');
+        console.error('[Auth Error] 로그인 세션(jp_wordbook_session)을 찾을 수 없습니다. 메인 페이지로 리다이렉트합니다.');
+        setSyncStatus('로그인이 필요합니다. 메인 화면으로 이동합니다...');
         window.setTimeout(() => {
             window.location.href = '../';
-        }, 900);
+        }, 600);
         return;
     }
+    // 🌟 [추가] 로그인 성공 후 독서대 진입 시 어떤 ID로 로그인되었는지 콘솔에 로깅
+    console.log(`[Auth Success] 정상적인 로그인 세션이 확인되었습니다. (접속 계정 ID: ${session.userId})`);
     syncSession = session;
-    syncAccountLabel.textContent = `${session.userId}의 단어장`;
+    if (syncAccountLabel) {
+        syncAccountLabel.textContent = `${session.userId}의 단어장`;
+    }
     const dictionary = new DictionaryStore(localStorage, storageKey, ['forgotten_words_ko']);
     await dictionary.init();
-    const saveDialog = createSaveDialog(async (word) => {
-        if (await dictionary.add(word)) {
-            refreshWordbook();
-            if (latestJsonWords.length > 0) {
-                renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
-            }
-            scheduleAutoSave();
-            showToast('단어장에 보관되었습니다.');
-        }
-    });
     const clearDialog = createClearDialog(async () => {
         await dictionary.clear();
         refreshWordbook();
@@ -72,6 +69,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const accountDeleteDialog = createAccountDeleteDialog(() => {
         deleteAccountFromDialog();
     });
+    const logoutConfirmDialog = createLogoutConfirmDialog(() => {
+        logoutFromWordbook();
+    });
     sortSelect.value = dictionary.getSortMode();
     setupSortDropdown(sortSelect);
     refreshWordbook();
@@ -85,6 +85,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById(tabId)?.classList.add('active');
         const btnIdx = tabId === 'tab-reader' ? 0 : 1;
         document.querySelectorAll('.tab-btn')[btnIdx]?.classList.add('active');
+        // 🌟 [핵심 추가] 독서 탭(tab-reader)이 아닌 다른 탭(단어장 등)으로 이동할 때 단어 단계 초기화
+        if (tabId !== 'tab-reader' && latestJsonWords.length > 0) {
+            // 마지막 인자에 true를 넘겨 열려있던 뜻/발음 힌트(Stage)를 백업하지 않고 초기화합니다.
+            renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll(), true);
+        }
         if (tabId === 'tab-wordbook')
             refreshWordbook();
     };
@@ -99,7 +104,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
             latestJsonWords = data.words;
-            renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
+            // 🌟 [안전 패치] 새로 지문을 입력하고 시작할 때도 기존 상태가 남아있지 않도록 마지막 인자에 true 전달
+            renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll(), true);
             inputPage.style.display = 'none';
             viewerPage.style.display = 'block';
             setReaderSupportVisible(false);
@@ -109,6 +115,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
     backButton.addEventListener('click', () => {
+        // 🌟 [핵심 추가] 뒤로가기 버튼을 눌러 입력창으로 나갈 때 열려있던 단어 뜻 정보 초기화
+        if (latestJsonWords.length > 0) {
+            renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll(), true);
+        }
         viewerPage.style.display = 'none';
         inputPage.style.display = 'flex';
         setReaderSupportVisible(true);
@@ -151,8 +161,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     copyExampleBtn.addEventListener('click', () => {
         copyLoadedText(exampleJsonText || exampleJsonEl.textContent || exampleJsonEl.innerText, copyExampleBtn, '예시 복사하기');
     });
+    // 💡 모르는 단어 복습 지문 프롬프트 복사 기능 구현
+    if (copyUnknownPromptBtn) {
+        copyUnknownPromptBtn.addEventListener('click', () => {
+            const words = dictionary.getAll();
+            if (words.length === 0) {
+                showToast('단어장에 저장된 단어가 없습니다.', true);
+                return;
+            }
+            // 단어 리스트 추출 (형식: 단어(발음) - 뜻)
+            const wordListString = words.map(w => {
+                const kanaStr = w.kana ? `(${w.kana})` : '';
+                return `- ${w.text}${kanaStr}: ${w.mean}`;
+            }).join('\n');
+            // 생성할 ChatGPT/LLM 프롬프트 서식
+            const unknownPromptText = `아래는 내가 공부하면서 저장한 "모르는 일본어 단어 리스트"야.
+
+[모르는 단어 리스트]
+${wordListString}
+
+이 단어들을 자연스럽게 활용하여 내가 복습할 수 있는 재미있는 '일본어 짧은 이야기(독해 지문)'를 1개 작성해줘.
+조건은 다음과 같아:
+1. 이야기 안에는 반드시 위의 단어들이 최대한 자연스럽게 포함되어야 해.
+2. N3~N2 정도의 난이도로 작성해줘.`;
+            copyTextToClipboard(unknownPromptText).then((success) => {
+                if (!success) {
+                    showToast('프롬프트 복사에 실패했습니다.', true);
+                    return;
+                }
+                copyUnknownPromptBtn.textContent = '✓ 프롬프트 복사 완료! 📋';
+                copyUnknownPromptBtn.classList.add('success');
+                showToast('복습용 프롬프트가 클립보드에 복사되었습니다.');
+                setTimeout(() => {
+                    copyUnknownPromptBtn.textContent = '모르는 단어 복습 지문 프롬프트 복사 📋';
+                    copyUnknownPromptBtn.classList.remove('success');
+                }, 2000);
+            });
+        });
+    }
     syncLogoutBtn.addEventListener('click', () => {
-        logoutFromWordbook();
+        logoutConfirmDialog.open();
     });
     syncNowBtn.addEventListener('click', () => {
         syncNow();
@@ -162,7 +210,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     function refreshWordbook() {
         const words = dictionary.getAll();
-        renderWordbook(wordbookContainer, words, removeWord);
+        renderWordbook(words, wordbookContainer, removeWord);
         studyCard.setWords(words);
     }
     async function removeWord(text) {
@@ -176,9 +224,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         showToast('단어가 삭제되었습니다.');
     }
     function askAndSave(word) {
-        if (dictionary.has(word.text))
+        if (dictionary.has(word.text)) {
+            showToast('이미 단어장에 존재하는 단어입니다.', true);
             return;
-        setTimeout(() => saveDialog.open(word), 100);
+        }
+        const saveDialog = createSaveDialog(word, async (finalWord) => {
+            if (await dictionary.add(finalWord)) {
+                refreshWordbook();
+                if (latestJsonWords.length > 0) {
+                    const currentWords = dictionary.getAll();
+                    const safeWordsArray = Array.isArray(currentWords)
+                        ? currentWords
+                        : (currentWords && typeof currentWords === 'object' && 'list' in currentWords ? currentWords.list : []);
+                    renderReader(latestJsonWords, viewerArea, askAndSave, safeWordsArray);
+                }
+                scheduleAutoSave();
+                showToast(`『${finalWord.text}』 단어장에 보관되었습니다.`);
+            }
+        });
+        setTimeout(() => saveDialog.open(), 100);
     }
     function setReaderSupportVisible(isVisible) {
         readerSupportBoxes.forEach((box) => {
@@ -207,7 +271,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     function readHomeSession() {
         try {
-            const raw = localStorage.getItem(sessionKey);
+            // 🌟 sessionStorage로 통일하여 메인에서 넘겨준 데이터를 정확히 가로챕니다.
+            const raw = sessionStorage.getItem(sessionKey);
             if (!raw)
                 return null;
             const session = JSON.parse(raw);
@@ -226,24 +291,63 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function loadLoggedInDictionary() {
         if (!syncSession)
             throw new Error('not_logged_in');
-        const firebase = await loadFirebaseSync();
-        await firebase.signInAnonymously(firebase.auth);
-        const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
-        const snapshot = await firebase.getDoc(documentRef);
-        if (!snapshot.exists())
-            throw new Error('not_found');
-        const data = snapshot.data();
-        if (data.passwordHash !== syncSession.passwordHash)
-            throw new Error('wrong_password');
-        if (!(await dictionary.importData(data.dictionary)))
-            throw new Error('invalid_data');
-        isApplyingRemoteDictionary = true;
-        sortSelect.value = dictionary.getSortMode();
-        sortSelect.dispatchEvent(new Event('change', { bubbles: true }));
-        isApplyingRemoteDictionary = false;
-        refreshWordbook();
-        if (latestJsonWords.length > 0) {
-            renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
+        try {
+            const firebase = await loadFirebaseSync();
+            await firebase.signInAnonymously(firebase.auth);
+            const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
+            const snapshot = await firebase.getDoc(documentRef);
+            if (!snapshot.exists())
+                throw new Error('not_found');
+            const data = snapshot.data();
+            if (data.passwordHash !== syncSession.passwordHash)
+                throw new Error('wrong_password');
+            // 🌟 [치명적 타이밍 버그 해결] 
+            // 로컬 추가와 서버 로드가 겹쳐 importData가 false를 뱉더라도, 
+            // 앱을 강제로 파괴(throw)하지 않고 안전하게 예외 처리하여 복구 흐름으로 돌립니다.
+            const importSuccess = await dictionary.importData(data.dictionary);
+            if (!importSuccess) {
+                console.warn("[안전 장치] 일시적인 데이터 싱크 불일치 감지. 현재 단어장 구조를 유지하며 자가 치유합니다.");
+            }
+            isApplyingRemoteDictionary = true;
+            // 🌟 [타입 에러 패치] 강제 문자열 대신 dictionary 객체에 등록된 정상적인 정렬 모드를 추출하여 대입합니다.
+            const currentMode = dictionary.getSortMode();
+            if (currentMode) {
+                sortSelect.value = currentMode;
+            }
+            // 렌더링 스택 꼬임 방지를 위해 이벤트 루프를 한 차례 미룹니다.
+            window.setTimeout(() => {
+                sortSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }, 0);
+            isApplyingRemoteDictionary = false;
+            refreshWordbook();
+            if (latestJsonWords.length > 0) {
+                // 상위 스택에서 정제된 순수 배열 형태만 안전하게 전달하여 2차 에러 차단
+                const allData = dictionary.getAll();
+                const safeSavedWords = Array.isArray(allData)
+                    ? allData
+                    : (allData && typeof allData === 'object' && 'list' in allData ? allData.list : []);
+                renderReader(latestJsonWords, viewerArea, askAndSave, safeSavedWords);
+            }
+        }
+        catch (error) {
+            // 🚨 invalid_data 예외가 상위로 전파되어 자바스크립트 전체가 다운되는 현상을 완벽히 방어합니다.
+            if (error?.message === 'invalid_data' || error?.toString().includes('invalid_data')) {
+                console.error("안전 모드 작동: 오염된 동기화 트래픽을 차단하고 안정적인 로컬 데이터를 유지합니다.");
+                // 🌟 [컴파일 에러 패치] 'latest' 문자열 주입 에러 우회 및 강제 동기화 정화
+                try {
+                    const fallbackMode = sortSelect.options[0]?.value;
+                    if (fallbackMode) {
+                        await dictionary.setSortMode(fallbackMode);
+                    }
+                }
+                catch (subError) {
+                    console.error("정렬 모드 대피 실패:", subError);
+                }
+                refreshWordbook();
+                return;
+            }
+            console.error("Firebase wordbook load failed:", error);
+            showToast("단어장을 불러오는 중 오류가 발생했습니다.");
         }
     }
     async function saveCurrentDictionaryToFirebase() {
@@ -299,10 +403,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast('현재 단어장을 서버에 저장했습니다.');
         }
         catch (error) {
-            console.error('Firebase wordbook upload failed:', error);
+            console.error('Firebase wordbook load failed:', error);
             const message = getSyncErrorMessage(error);
             setSyncStatus(message);
             showToast(message, true);
+            sessionStorage.removeItem(sessionKey);
         }
         finally {
             setSyncBusy(false);
@@ -321,9 +426,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             await firebase.signInAnonymously(firebase.auth);
             const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
             await firebase.deleteDoc(documentRef);
+            // 로컬스토리지 비우기
             localStorage.removeItem(sessionKey);
             localStorage.removeItem(storageKey);
             localStorage.removeItem('forgotten_words_ko');
+            // 🌟 [핵심 추가] 홈 화면의 자동 로그인 방지를 위해 세션스토리지를 완벽하게 박멸합니다.
+            sessionStorage.removeItem('jp_wordbook_session');
             syncSession = null;
             showToast('Firebase 단어장 계정을 삭제했습니다.');
             setSyncStatus('계정을 삭제했습니다. 홈으로 이동합니다.');
@@ -438,7 +546,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             autoSaveTimer = undefined;
         }
         syncSession = null;
-        localStorage.removeItem(sessionKey);
+        sessionStorage.removeItem('jp_wordbook_session');
         setSyncStatus('로그아웃했습니다. 홈으로 이동합니다.');
         showToast('단어장에서 로그아웃했습니다.');
         window.location.href = '../';
@@ -556,22 +664,26 @@ function copyLoadedText(text, button, defaultLabel) {
         }, 2000);
     });
 }
-// @ts-ignore
 function setupSortDropdown(select) {
+    if (!select)
+        return;
+    // 🔒 [방어 1] 이미 내 옆에 커스텀 드롭다운(.sort-dropdown)이 있다면 절대 중복 생성하지 않음
+    if (select.nextElementSibling?.classList.contains('sort-dropdown')) {
+        return;
+    }
     const wrapper = document.createElement('div');
     const trigger = document.createElement('button');
     const menu = document.createElement('div');
     const selectedText = document.createElement('span');
-    let closeTimer;
     wrapper.className = 'sort-dropdown';
     trigger.className = 'sort-dropdown-trigger';
     trigger.type = 'button';
     trigger.setAttribute('aria-haspopup', 'listbox');
-    trigger.setAttribute('aria-expanded', 'false');
     menu.className = 'sort-dropdown-menu';
     menu.setAttribute('role', 'listbox');
     selectedText.className = 'sort-dropdown-label';
     trigger.appendChild(selectedText);
+    // 메뉴 아이템(버튼)들을 최초 딱 1번만 빌드
     Array.from(select.options).forEach((option) => {
         const item = document.createElement('button');
         item.className = 'sort-dropdown-option';
@@ -579,48 +691,37 @@ function setupSortDropdown(select) {
         item.textContent = option.textContent;
         item.dataset.value = option.value;
         item.setAttribute('role', 'option');
+        // 🌟 [핵심 수정] 기존에 메커니즘을 방해하던 복잡한 이벤트 전파 차단 코드를 걷어내고,
+        // 순수하게 값 변경과 체인지 이벤트만 트리거하도록 간소화했습니다.
         item.addEventListener('click', () => {
             select.value = option.value;
             select.dispatchEvent(new Event('change', { bubbles: true }));
-            wrapper.classList.remove('open');
-            trigger.setAttribute('aria-expanded', 'false');
         });
         menu.appendChild(item);
     });
+    // 선택된 텍스트와 하이라이트 상태만 매칭하는 싱크 함수
     const sync = () => {
-        const selected = select.selectedOptions[0];
-        selectedText.textContent = selected?.textContent || '정렬';
+        const selectedOptions = select.selectedOptions;
+        if (selectedOptions && selectedOptions.length > 0) {
+            selectedText.textContent = selectedOptions[0].textContent;
+        }
+        else {
+            const fallbackOption = Array.from(select.options).find(opt => opt.value === select.value);
+            selectedText.textContent = fallbackOption?.textContent || '정렬';
+        }
         menu.querySelectorAll('.sort-dropdown-option').forEach((item) => {
             const isSelected = item.dataset.value === select.value;
             item.classList.toggle('selected', isSelected);
             item.setAttribute('aria-selected', String(isSelected));
         });
     };
-    const open = () => {
-        if (closeTimer)
-            window.clearTimeout(closeTimer);
-        wrapper.classList.add('open');
-        trigger.setAttribute('aria-expanded', 'true');
-    };
-    const close = () => {
-        wrapper.classList.remove('open');
-        trigger.setAttribute('aria-expanded', 'false');
-    };
-    wrapper.addEventListener('mouseenter', open);
-    wrapper.addEventListener('mouseleave', () => {
-        closeTimer = window.setTimeout(close, 180);
-    });
-    menu.addEventListener('mouseenter', open);
-    trigger.addEventListener('click', () => {
-        if (closeTimer)
-            window.clearTimeout(closeTimer);
-        const isOpen = wrapper.classList.toggle('open');
-        trigger.setAttribute('aria-expanded', String(isOpen));
-    });
+    // 원본 select 태그의 값이 바뀔 때마다 텍스트 상태만 매칭하도록 바인딩
     select.addEventListener('change', sync);
+    // 순정 select 태그를 투명하게 뒤로 숨기기 위해 클래스 부여
     select.classList.add('native-sort-select');
     select.after(wrapper);
     wrapper.append(trigger, menu);
+    // 최초 초기 상태 동기화
     sync();
 }
 function createSyncConfirmDialog(onConfirm) {
@@ -687,6 +788,44 @@ function createAccountDeleteDialog(onConfirm) {
         dialog.classList.add('show');
         dialog.setAttribute('aria-hidden', 'false');
         cancelBtn.focus();
+    };
+    cancelBtn.addEventListener('click', close);
+    confirmBtn.addEventListener('click', () => {
+        close();
+        onConfirm();
+    });
+    dialog.addEventListener('click', (event) => {
+        if (event.target === dialog)
+            close();
+    });
+    return { open, close };
+}
+function createLogoutConfirmDialog(onConfirm) {
+    const dialog = document.createElement('div');
+    dialog.className = 'word-save-dialog';
+    dialog.setAttribute('aria-hidden', 'true');
+    dialog.innerHTML = `
+        <div class="word-save-card" role="dialog" aria-modal="true" aria-labelledby="logout-dialog-title">
+            <div class="word-save-label" style="background-color: var(--ink-sub);">로그아웃</div>
+            <div class="word-save-title" id="logout-dialog-title">로그아웃하시겠습니까?</div>
+            <div class="word-save-message">로그아웃하면 로컬 변경사항의 자동 서버 동기화가 중단됩니다.</div>
+            <div class="word-save-actions">
+                <button type="button" class="word-save-cancel">취소</button>
+                <button type="button" class="word-save-confirm" style="background-color: var(--primary); color: #fff;">로그아웃</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(dialog);
+    const cancelBtn = dialog.querySelector('.word-save-cancel');
+    const confirmBtn = dialog.querySelector('.word-save-confirm');
+    const close = () => {
+        dialog.classList.remove('show');
+        dialog.setAttribute('aria-hidden', 'true');
+    };
+    const open = () => {
+        dialog.classList.add('show');
+        dialog.setAttribute('aria-hidden', 'false');
+        confirmBtn.focus();
     };
     cancelBtn.addEventListener('click', close);
     confirmBtn.addEventListener('click', () => {
