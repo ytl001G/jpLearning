@@ -10,6 +10,8 @@ service cloud.firestore {
         && request.resource.data.ownerId is string
         && request.resource.data.ownerId == userId
         && request.resource.data.passwordHash.matches('^[a-f0-9]{64}$')
+        && (!exists(/databases/$(database)/documents/wordbooks/$(userId))
+          || request.resource.data.passwordHash == resource.data.passwordHash)
         && request.resource.data.updatedAt is string;
     }
   }

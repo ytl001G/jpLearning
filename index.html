@@ -12,8 +12,28 @@
         <h1>葉書</h1>
         <p>읽고, 저장하고, 다시 꺼내 보는 일본어 학습 공간입니다.</p>
         <nav class="home-nav" aria-label="독서대 선택">
-            <a class="primary" href="jp/">일본어 독서대</a>
+            <a class="primary" href="jp/" id="jp-entry-link">일본어 독서대</a>
         </nav>
     </main>
+    <div class="login-dialog" id="jp-login-dialog" aria-hidden="true">
+        <form class="login-card" id="jp-login-form">
+            <div class="login-label">단어장 로그인</div>
+            <div class="login-title">일본어 단어장</div>
+            <label class="login-field">
+                <span>사용자 ID</span>
+                <input type="text" id="home-sync-user-id" autocomplete="username" placeholder="예: my-jp-words" required>
+            </label>
+            <label class="login-field">
+                <span>비밀번호</span>
+                <input type="password" id="home-sync-password" autocomplete="current-password" placeholder="단어장 비밀번호" required>
+            </label>
+            <div class="login-status" id="home-login-status">같은 ID와 비밀번호로 PC와 모바일 단어장을 불러옵니다.</div>
+            <div class="login-actions">
+                <button type="button" class="secondary" id="home-login-cancel">취소</button>
+                <button type="submit" class="primary">들어가기</button>
+            </div>
+        </form>
+    </div>
+    <script type="module" src="home.js"></script>
 </body>
 </html>

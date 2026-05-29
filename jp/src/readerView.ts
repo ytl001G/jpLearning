@@ -1,4 +1,4 @@
-import type { WordData, WordItem } from './utils.js';
+import { type WordData, type WordItem, showToast } from './utils.js';
 
 const PUNCTUATION = new Set<string>([
     '。', '、', '「', '」', '『', '』', '.', ',', '"', "'", '“', '”',
@@ -8,12 +8,15 @@ const PUNCTUATION = new Set<string>([
 export function renderReader(
     words: WordData[],
     viewerArea: HTMLDivElement,
-    onSaveRequest: (word: WordItem) => void
+    onSaveRequest: (word: WordItem) => void,
+    savedWords: WordItem[] | { list: WordItem[] } = []
 ): void {
     viewerArea.innerHTML = '';
 
     words.forEach((wordData) => {
+        // utils.js의 WordData 타입 정의에 맞춰 튜플 구조 분해 수행
         const [type, text, kana, original, originalKana, contextMean, mean] = wordData;
+
         const pronunciation = kana || '';
         const baseText = original && original.trim() ? original : text;
         const targetKana = originalKana && originalKana.trim() ? originalKana : pronunciation;
@@ -42,6 +45,7 @@ export function renderReader(
         span.dataset.stage = '0';
 
         const isPronunciationOmitted = !pronunciation.trim() || text === pronunciation;
+        
         span.addEventListener('click', function (this: HTMLSpanElement): void {
             let stage = Number.parseInt(this.dataset.stage || '0', 10);
             this.classList.remove('stage-1', 'stage-2', 'stage-3');
@@ -69,9 +73,27 @@ export function renderReader(
 
             this.dataset.stage = stage.toString();
         });
+
         span.addEventListener('contextmenu', (event) => {
             event.preventDefault();
-            onSaveRequest(wordToSave);
+
+            let currentList: WordItem[] = [];
+            if (Array.isArray(savedWords)) {
+                currentList = savedWords;
+            } else if (savedWords && typeof savedWords === 'object' && 'list' in savedWords) {
+                currentList = savedWords.list;
+            }
+
+            const isAlreadySaved = currentList.some((item) => {
+                return item.text.trim() === wordToSave.text.trim();
+            });
+
+            if (isAlreadySaved) {
+                // 🌟 [수정] utils에서 가져온 showToast 유틸리티 함수를 그대로 활용합니다.
+                showToast('이미 저장된 단어입니다.');
+            } else {
+                onSaveRequest(wordToSave);
+            }
         });
 
         viewerArea.appendChild(span);
@@ -110,12 +132,14 @@ export function renderWordbook(
         meta.className = 'meta';
         meta.textContent = item.kana ? `(${item.kana}) [${item.mean}]` : `[${item.mean}]`;
         actions.className = 'wordbook-actions';
+        
         ttsBtn.className = 'tts-btn';
         ttsBtn.type = 'button';
         ttsBtn.innerHTML = speakerIconSvg();
         ttsBtn.setAttribute('aria-label', `${item.text} 발음 듣기`);
         ttsBtn.title = '발음 듣기';
         ttsBtn.addEventListener('click', () => playJapaneseTts(item.text, ttsBtn));
+
         removeBtn.className = 'remove-btn';
         removeBtn.type = 'button';
         removeBtn.textContent = '✕';
@@ -141,6 +165,7 @@ function playJapaneseTts(text: string, triggerButton?: HTMLButtonElement): void 
         const utterance = new SpeechSynthesisUtterance(query);
         const voices = window.speechSynthesis.getVoices();
         const japaneseVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith('ja'));
+        
         utterance.voice = japaneseVoices.find((voice) => voice.name.toLowerCase().includes('google'))
             || japaneseVoices[0]
             || null;
@@ -171,7 +196,7 @@ function speakerIconSvg(): string {
         <svg class="tts-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path class="tts-icon-body" d="M4.5 9.25h3.25L12.2 5.4v13.2l-4.45-3.85H4.5z"></path>
             <path class="tts-icon-wave" d="M15.1 9.25c.75.72 1.15 1.62 1.15 2.75s-.4 2.03-1.15 2.75"></path>
-            <path class="tts-icon-wave" d="M17.75 6.75A7.1 7.1 0 0 1 19.9 12a7.1 7.1 0 0 1-2.15 5.25"></path>
+            <path class="tts-icon-wave" d="M17.75 6.75A7.1 7.1 0 0 1 19.9 12 a7.1 7.1 0 0 1-2.15 5.25"></path>
         </svg>
     `;
 }
@@ -199,8 +224,11 @@ export class StudyCard {
 
         this.ttsBtn.addEventListener('click', () => {
             const item = this.words[this.index];
-            if (item) playJapaneseTts(item.text, this.ttsBtn);
+            if (item) {
+                playJapaneseTts(item.text, this.ttsBtn);
+            }
         });
+        
         this.cardHint.addEventListener('click', () => this.reveal());
         this.cardPrev.addEventListener('click', () => this.move(-1));
         this.cardNext.addEventListener('click', () => this.move(1));

@@ -53,19 +53,12 @@
         </div>
         <h2>나만의 암기 단어장</h2>
         <div class="sync-panel">
-            <label class="sync-field">
-                <span>사용자 ID</span>
-                <input type="text" id="sync-user-id" autocomplete="username" placeholder="예: my-jp-words">
-            </label>
-            <label class="sync-field">
-                <span>비밀번호</span>
-                <input type="password" id="sync-password" autocomplete="current-password" placeholder="단어장 비밀번호">
-            </label>
+            <div class="sync-account" id="sync-account-label">로그인 확인 중...</div>
             <div class="sync-actions">
-                <button class="sync-btn primary" id="sync-upload-btn" type="button">업로드</button>
-                <button class="sync-btn" id="sync-download-btn" type="button">불러오기</button>
+                <button class="sync-btn primary" id="sync-now-btn" type="button">동기화</button>
+                <button class="sync-btn" id="sync-logout-btn" type="button">로그아웃</button>
             </div>
-            <div class="sync-status" id="sync-status">PC와 모바일에서 같은 ID와 비밀번호를 입력하면 단어장을 공유할 수 있습니다.</div>
+            <div class="sync-status" id="sync-status">로그인하면 단어장을 불러오고 이후 변경 사항이 자동 저장됩니다.</div>
         </div>
         
         <div class="study-card-area">

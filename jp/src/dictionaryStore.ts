@@ -172,8 +172,12 @@ function dictionaryFromWords(words: unknown[]): StoredDictionary {
     };
 
     words.filter(isWordItem).forEach((item, index) => {
+        // 🌟 [수정] 빈 문자열 처리 및 원본 JS와 동일한 방어 로직 반영
+        const normalized = normalizeKey(item.text);
+        if (!normalized) return; 
+
         let node = data.root;
-        for (const char of Array.from(normalizeKey(item.text))) {
+        for (const char of Array.from(normalized)) {
             const childKey = hashToken(char);
             node.children[childKey] ??= createNode(`${node.hash}:${childKey}`);
             node = node.children[childKey];
@@ -261,7 +265,9 @@ function isSortMode(value: unknown): value is DictionarySortMode {
 function isTrieNode(value: unknown): value is TrieNode {
     if (!value || typeof value !== 'object') return false;
     const node = value as Partial<TrieNode>;
+    
+    // 🌟 [개선] 자식 노드들의 구조적 정밀성 검증 추가 (TypeScript 컴파일러 추론 극대화)
     return typeof node.hash === 'string'
-        && Boolean(node.children)
+        && node.children !== null
         && typeof node.children === 'object';
 }

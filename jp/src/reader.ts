@@ -33,10 +33,9 @@ document.addEventListener('DOMContentLoaded', (): void => {
     const addKana = document.getElementById('add-kana') as HTMLInputElement;
     const addMean = document.getElementById('add-mean') as HTMLInputElement;
     const addWordSubmit = document.getElementById('add-word-submit') as HTMLButtonElement;
-    const syncUserId = document.getElementById('sync-user-id') as HTMLInputElement;
-    const syncPassword = document.getElementById('sync-password') as HTMLInputElement;
-    const syncUploadBtn = document.getElementById('sync-upload-btn') as HTMLButtonElement;
-    const syncDownloadBtn = document.getElementById('sync-download-btn') as HTMLButtonElement;
+    const syncLogoutBtn = document.getElementById('sync-logout-btn') as HTMLButtonElement;
+    const syncNowBtn = document.getElementById('sync-now-btn') as HTMLButtonElement;
+    const syncAccountLabel = document.getElementById('sync-account-label') as HTMLDivElement;
     const syncStatus = document.getElementById('sync-status') as HTMLDivElement;
 
     const studyCard = new StudyCard(
@@ -49,15 +48,28 @@ document.addEventListener('DOMContentLoaded', (): void => {
     );
 
     const storageKey = document.body.dataset.storageKey || 'forgotten_japanese_words_ko';
-    const syncUserKey = `${storageKey}_sync_user`;
+    const sessionKey = 'jp_wordbook_session';
     const firebaseConfigSrc = new URL('./firebaseConfig.js', import.meta.url).href;
     const dictionary = new DictionaryStore(localStorage, storageKey, ['forgotten_words_ko']);
     let promptContentText = '';
     let exampleJsonText = '';
+    let syncSession: { userId: string; passwordHash: string } | null = null;
+    let autoSaveTimer: number | undefined;
+    let isApplyingRemoteDictionary = false;
+    
+    // 🌟 추가/삭제 시 본문을 새로 그리기 위해, 현재 불러온 본문의 단어 배열 데이터를 캐싱하는 변수입니다.
+    let latestJsonWords: any[] = [];
 
     const saveDialog = createSaveDialog((word) => {
         if (dictionary.add(word)) {
             refreshWordbook();
+            
+            // 🌟 [핵심 변경] 새 단어가 단어장에 들어갔으므로, 최신 단어장 목록을 전달하며 본문 상태를 갱신합니다.
+            if (latestJsonWords.length > 0) {
+                renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
+            }
+            
+            scheduleAutoSave();
             showToast('단어장에 보관되었습니다.');
         }
     });
@@ -65,16 +77,27 @@ document.addEventListener('DOMContentLoaded', (): void => {
     const clearDialog = createClearDialog(() => {
         dictionary.clear();
         refreshWordbook();
+        
+        // 🌟 [핵심 변경] 단어장이 초기화되었으므로, 본문의 중복 검사 리스트도 빈 배열로 동기화합니다.
+        if (latestJsonWords.length > 0) {
+            renderReader(latestJsonWords, viewerArea, askAndSave, []);
+        }
+        
+        scheduleAutoSave();
         showToast('단어장이 초기화되었습니다.');
     });
 
+    const syncConfirmDialog = createSyncConfirmDialog(() => {
+        uploadCurrentDictionaryFromSyncDialog();
+    });
+
     sortSelect.value = dictionary.getSortMode();
-    syncUserId.value = localStorage.getItem(syncUserKey) || '';
     setupSortDropdown(sortSelect);
     refreshWordbook();
     loadPromptText();
     loadExampleJson();
     updateSyncAvailability();
+    restoreSessionFromHome();
 
     (window as any).switchTab = (tabId: string): void => {
         document.querySelectorAll('.page-content').forEach((p) => p.classList.remove('active'));
@@ -99,7 +122,12 @@ document.addEventListener('DOMContentLoaded', (): void => {
                 return;
             }
 
-            renderReader(data.words, viewerArea, askAndSave);
+            // 🌟 분석된 단어 본문 데이터를 전역 캐싱 변수에 백업해 둡니다.
+            latestJsonWords = data.words;
+
+            // 🌟 최초 로드 시 최신 단어장 스냅샷 배열(`dictionary.getAll()`)을 정확히 넘겨줍니다.
+            renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
+            
             inputPage.style.display = 'none';
             viewerPage.style.display = 'block';
             setReaderSupportVisible(false);
@@ -135,6 +163,13 @@ document.addEventListener('DOMContentLoaded', (): void => {
         addKana.value = '';
         addMean.value = '';
         refreshWordbook();
+        
+        // 🌟 수동 단어 추가창에서 수동으로 넣었을 때도 리더 본문과 동기화시킵니다.
+        if (latestJsonWords.length > 0) {
+            renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
+        }
+
+        scheduleAutoSave();
         showToast('단어장에 추가되었습니다.');
     });
 
@@ -145,6 +180,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
     sortSelect.addEventListener('change', (): void => {
         dictionary.setSortMode(sortSelect.value as DictionarySortMode);
         refreshWordbook();
+        scheduleAutoSave();
     });
 
     copyPromptBtn.addEventListener('click', (): void => {
@@ -155,16 +191,12 @@ document.addEventListener('DOMContentLoaded', (): void => {
         copyLoadedText(exampleJsonText || exampleJsonEl.textContent || exampleJsonEl.innerText, copyExampleBtn, '예시 복사하기');
     });
 
-    syncUserId.addEventListener('input', (): void => {
-        localStorage.setItem(syncUserKey, syncUserId.value.trim());
+    syncLogoutBtn.addEventListener('click', (): void => {
+        logoutFromWordbook();
     });
 
-    syncUploadBtn.addEventListener('click', (): void => {
-        syncDictionary('upload');
-    });
-
-    syncDownloadBtn.addEventListener('click', (): void => {
-        syncDictionary('download');
+    syncNowBtn.addEventListener('click', (): void => {
+        syncNow();
     });
 
     function refreshWordbook(): void {
@@ -176,6 +208,13 @@ document.addEventListener('DOMContentLoaded', (): void => {
     function removeWord(text: string): void {
         if (!dictionary.remove(text)) return;
         refreshWordbook();
+        
+        // 🌟 [핵심 변경] 단어장에서 휴지통(✕) 버튼을 눌러 단어를 지웠을 때도 본문 리더의 중복 체크를 즉시 반영합니다.
+        if (latestJsonWords.length > 0) {
+            renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
+        }
+
+        scheduleAutoSave();
         showToast('단어가 삭제되었습니다.');
     }
 
@@ -190,24 +229,108 @@ document.addEventListener('DOMContentLoaded', (): void => {
         });
     }
 
-    async function syncDictionary(mode: 'upload' | 'download'): Promise<void> {
-        const userId = syncUserId.value.trim();
-        const password = syncPassword.value;
-        if (!/^[a-zA-Z0-9_-]{3,40}$/.test(userId)) {
-            showToast('사용자 ID는 영문, 숫자, -, _로 3자 이상 입력해 주세요.', true);
+    async function restoreSessionFromHome(): Promise<void> {
+        const session = readHomeSession();
+        if (!session) {
+            setSyncStatus('홈에서 일본어 단어장 로그인을 먼저 해 주세요.');
+            window.setTimeout(() => {
+                window.location.href = '../';
+            }, 900);
             return;
         }
 
-        if (password.length < 4) {
-            showToast('비밀번호는 4자 이상 입력해 주세요.', true);
-            return;
-        }
-
-        localStorage.setItem(syncUserKey, userId);
-        setSyncBusy(true, mode === 'upload' ? '업로드 중...' : '불러오는 중...');
+        syncSession = session;
+        syncAccountLabel.textContent = `${session.userId}의 단어장`;
+        setSyncBusy(true, '단어장 불러오는 중...');
 
         try {
-            await syncDictionaryWithFirebase(mode, userId, password);
+            await loadLoggedInDictionary();
+            setSyncStatus(`${session.userId}의 단어장에 로그인했습니다. 변경 사항은 자동 저장됩니다.`);
+            showToast('단어장을 불러왔습니다.');
+        } catch (error) {
+            const message = getSyncErrorMessage(error);
+            setSyncStatus(message);
+            showToast(message, true);
+            localStorage.removeItem(sessionKey);
+        } finally {
+            setSyncBusy(false);
+        }
+    }
+
+    function readHomeSession(): { userId: string; passwordHash: string } | null {
+        try {
+            const raw = localStorage.getItem(sessionKey); 
+            if (!raw) return null;
+            const session = JSON.parse(raw) as Partial<{ userId: string; passwordHash: string }>;
+            if (
+                typeof session.userId === 'string'
+                && /^[a-zA-Z0-9_-]{3,40}$/.test(session.userId)
+                && typeof session.passwordHash === 'string'
+                && /^[a-f0-9]{64}$/.test(session.passwordHash)
+            ) {
+                return { userId: session.userId, passwordHash: session.passwordHash };
+            }
+        } catch (error) {
+            return null;
+        }
+        return null;
+    }
+
+    async function loadLoggedInDictionary(): Promise<void> {
+        if (!syncSession) throw new Error('not_logged_in');
+        const firebase = await loadFirebaseSync();
+        const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
+        const snapshot = await firebase.getDoc(documentRef);
+        if (!snapshot.exists()) throw new Error('not_found');
+
+        const data = snapshot.data();
+        if (data.passwordHash !== syncSession.passwordHash) throw new Error('wrong_password');
+        if (!dictionary.importData(data.dictionary)) throw new Error('invalid_data');
+        isApplyingRemoteDictionary = true;
+        sortSelect.value = dictionary.getSortMode();
+        sortSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        isApplyingRemoteDictionary = false;
+        refreshWordbook();
+        
+        // 🌟 원격 서버 데이터(로그인 연동)를 긁어와 로컬 단어장이 엎어졌을 때도 리더를 최신화해 줍니다.
+        if (latestJsonWords.length > 0) {
+            renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
+        }
+    }
+
+    async function saveCurrentDictionaryToFirebase(): Promise<void> {
+        if (!syncSession) return;
+
+        const firebase = await loadFirebaseSync();
+        const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
+        await firebase.setDoc(documentRef, {
+            dictionary: dictionary.exportData(),
+            ownerId: syncSession.userId,
+            passwordHash: syncSession.passwordHash,
+            updatedAt: new Date().toISOString()
+        });
+    }
+
+    async function syncNow(): Promise<void> {
+        if (!requireSyncSession()) return;
+        if (autoSaveTimer) {
+            window.clearTimeout(autoSaveTimer);
+            autoSaveTimer = undefined;
+        }
+
+        setSyncBusy(true, '동기화 상태 확인 중...');
+        try {
+            const remoteDictionary = await loadRemoteDictionary();
+            const isSynced = areDictionariesEquivalent(dictionary.exportData(), remoteDictionary);
+            if (isSynced) {
+                const message = `${syncSession?.userId || '단어장'} 동기화 완료 상태입니다.`;
+                setSyncStatus(message);
+                showToast(message);
+                return;
+            }
+
+            setSyncStatus('로컬 단어장과 서버 단어장이 다릅니다.');
+            syncConfirmDialog.open();
         } catch (error) {
             const message = getSyncErrorMessage(error);
             setSyncStatus(message);
@@ -217,46 +340,129 @@ document.addEventListener('DOMContentLoaded', (): void => {
         }
     }
 
-    async function syncDictionaryWithFirebase(mode: 'upload' | 'download', userId: string, password: string): Promise<void> {
+    async function uploadCurrentDictionaryFromSyncDialog(): Promise<void> {
+        if (!requireSyncSession()) return;
+
+        setSyncBusy(true, '서버에 업로드 중...');
+        try {
+            await saveCurrentDictionaryToFirebase();
+            setSyncStatus(`${syncSession?.userId || '단어장'} 서버에 현재 상태를 업로드했습니다.`);
+            showToast('현재 단어장을 서버에 저장했습니다.');
+        } catch (error) {
+            const message = getSyncErrorMessage(error);
+            setSyncStatus(message);
+            showToast(message, true);
+        } finally {
+            setSyncBusy(false);
+        }
+    }
+
+    async function loadRemoteDictionary(): Promise<unknown> {
+        if (!syncSession) throw new Error('not_logged_in');
+
         const firebase = await loadFirebaseSync();
-        const passwordHash = await createPasswordHash(password);
-        const documentRef = firebase.doc(firebase.db, 'wordbooks', userId);
+        const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
         const snapshot = await firebase.getDoc(documentRef);
-
-        if (snapshot.exists()) {
-            const savedData = snapshot.data();
-            if (savedData.passwordHash !== passwordHash) {
-                throw new Error('wrong_password');
-            }
-        }
-
-        if (mode === 'upload') {
-            await firebase.setDoc(documentRef, {
-                dictionary: dictionary.exportData(),
-                ownerId: userId,
-                passwordHash,
-                updatedAt: new Date().toISOString()
-            });
-            setSyncStatus('Firebase에 단어장을 저장했습니다.');
-            showToast('동기화 업로드 완료');
-            return;
-        }
-
         if (!snapshot.exists()) throw new Error('not_found');
 
         const data = snapshot.data();
-        if (!dictionary.importData(data.dictionary)) throw new Error('invalid_data');
-        sortSelect.value = dictionary.getSortMode();
-        sortSelect.dispatchEvent(new Event('change', { bubbles: true }));
-        refreshWordbook();
-        setSyncStatus('Firebase에서 단어장을 불러왔습니다.');
-        showToast('동기화 불러오기 완료');
+        if (data.passwordHash !== syncSession.passwordHash) throw new Error('wrong_password');
+        return data.dictionary;
     }
 
-    async function createPasswordHash(password: string): Promise<string> {
-        const input = new TextEncoder().encode(password);
-        const hash = await crypto.subtle.digest('SHA-256', input);
-        return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    function requireSyncSession(): boolean {
+        if (syncSession) return true;
+        const message = '먼저 단어장에 로그인해 주세요.';
+        setSyncStatus(message);
+        showToast(message, true);
+        return false;
+    }
+
+    function areDictionariesEquivalent(localData: unknown, remoteData: unknown): boolean {
+        const localSnapshot = createComparableDictionarySnapshot(localData);
+        const remoteSnapshot = createComparableDictionarySnapshot(remoteData);
+        return Boolean(localSnapshot && remoteSnapshot)
+            && JSON.stringify(localSnapshot) === JSON.stringify(remoteSnapshot);
+    }
+
+    function createComparableDictionarySnapshot(data: unknown): { sortMode: string; words: WordItem[] } | null {
+        if (!data || typeof data !== 'object') return null;
+        
+        let record = data as Record<string, any>;
+        if ('dictionary' in record && record.dictionary && typeof record.dictionary === 'object') {
+            record = record.dictionary;
+        }
+        
+        const words: WordItem[] = [];
+        collectWordsFromTrie(record.root, words);
+        
+        return {
+            sortMode: typeof record.sortMode === 'string' ? record.sortMode : 'text',
+            words: words
+                .map((word) => ({
+                    text: word.text.trim().normalize('NFKC'),
+                    kana: word.kana.trim().normalize('NFKC'),
+                    mean: word.mean.trim().normalize('NFKC')
+                }))
+                .sort((a, b) => {
+                    return a.text.localeCompare(b.text, 'ja')
+                        || a.kana.localeCompare(b.kana, 'ja')
+                        || a.mean.localeCompare(b.mean, 'ko');
+                })
+        };
+    }
+
+    function collectWordsFromTrie(node: unknown, words: WordItem[]): void {
+        if (!node || typeof node !== 'object') return;
+        const trieNode = node as { item?: unknown; children?: unknown };
+        if (isWordItemLike(trieNode.item)) {
+            words.push({
+                text: trieNode.item.text,
+                kana: trieNode.item.kana,
+                mean: trieNode.item.mean
+            });
+        }
+
+        if (!trieNode.children || typeof trieNode.children !== 'object') return;
+        Object.values(trieNode.children).forEach((child) => collectWordsFromTrie(child, words));
+    }
+
+    function isWordItemLike(value: unknown): value is WordItem {
+        if (!value || typeof value !== 'object') return false;
+        const item = value as Partial<WordItem>;
+        return typeof item.text === 'string'
+            && typeof item.kana === 'string'
+            && typeof item.mean === 'string';
+    }
+
+    function scheduleAutoSave(): void {
+        if (!syncSession || isApplyingRemoteDictionary) return;
+        if (autoSaveTimer) window.clearTimeout(autoSaveTimer);
+
+        setSyncStatus('변경 사항 저장 대기 중...');
+        autoSaveTimer = window.setTimeout(() => {
+            autoSaveTimer = undefined;
+            saveCurrentDictionaryToFirebase()
+                .then(() => setSyncStatus(`${syncSession?.userId || '단어장'} 자동 저장 완료`))
+                .catch((error) => {
+                    const message = getSyncErrorMessage(error);
+                    setSyncStatus(message);
+                    showToast(message, true);
+                });
+        }, 700);
+    }
+
+    function logoutFromWordbook(): void {
+        if (autoSaveTimer) {
+            window.clearTimeout(autoSaveTimer);
+            autoSaveTimer = undefined;
+        }
+
+        syncSession = null;
+        localStorage.removeItem(sessionKey);
+        setSyncStatus('로그아웃했습니다. 홈으로 이동합니다.');
+        showToast('단어장에서 로그아웃했습니다.');
+        window.location.href = '../';
     }
 
     async function loadFirebaseSync(): Promise<{
@@ -273,8 +479,8 @@ document.addEventListener('DOMContentLoaded', (): void => {
 
         const firebaseAppUrl = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
         const firestoreUrl = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
-        const appModule = await import(firebaseAppUrl);
-        const firestoreModule = await import(firestoreUrl);
+        const appModule = await import(/* @vite-ignore */ firebaseAppUrl);
+        const firestoreModule = await import(/* @vite-ignore */ firestoreUrl);
         const apps = appModule.getApps();
         const app = apps.length > 0 ? apps[0] : appModule.initializeApp(firebaseConfig);
         const db = firestoreModule.getFirestore(app);
@@ -312,16 +518,20 @@ document.addEventListener('DOMContentLoaded', (): void => {
             return '비밀번호가 맞지 않습니다.';
         }
 
+        if (error.message === 'not_logged_in') {
+            return '먼저 단어장에 로그인해 주세요.';
+        }
+
         return 'Firebase 연결에 실패했습니다. 설정값과 Firestore 규칙을 확인해 주세요.';
     }
 
     function updateSyncAvailability(): void {
-        setSyncStatus('같은 ID와 비밀번호를 입력하면 GitHub Pages에서도 PC와 모바일 단어장이 동기화됩니다.');
+        setSyncStatus('로그인하면 단어장을 불러오고 이후 변경 사항이 자동 저장됩니다.');
     }
 
     function setSyncBusy(isBusy: boolean, message?: string): void {
-        syncUploadBtn.disabled = isBusy;
-        syncDownloadBtn.disabled = isBusy;
+        syncLogoutBtn.disabled = isBusy;
+        syncNowBtn.disabled = isBusy;
         if (message) setSyncStatus(message);
     }
 
@@ -442,4 +652,51 @@ function setupSortDropdown(select: HTMLSelectElement): void {
     select.after(wrapper);
     wrapper.append(trigger, menu);
     sync();
+}
+
+function createSyncConfirmDialog(onConfirm: () => void): {
+    open: () => void;
+    close: () => void;
+} {
+    const dialog = document.createElement('div');
+    dialog.className = 'word-save-dialog';
+    dialog.setAttribute('aria-hidden', 'true');
+    dialog.innerHTML = `
+        <div class="word-save-card" role="dialog" aria-modal="true" aria-labelledby="sync-dialog-title">
+            <div class="word-save-label">동기화 확인</div>
+            <div class="word-save-title" id="sync-dialog-title">서버와 내용이 다릅니다</div>
+            <div class="word-save-message">지금 화면의 단어장을 서버에 업로드할까요?</div>
+            <div class="word-save-actions">
+                <button type="button" class="word-save-cancel">취소</button>
+                <button type="button" class="word-save-confirm">업로드</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(dialog);
+
+    const cancelBtn = dialog.querySelector('.word-save-cancel') as HTMLButtonElement;
+    const confirmBtn = dialog.querySelector('.word-save-confirm') as HTMLButtonElement;
+
+    const close = (): void => {
+        dialog.classList.remove('show');
+        dialog.setAttribute('aria-hidden', 'true');
+    };
+
+    const open = (): void => {
+        dialog.classList.add('show');
+        dialog.setAttribute('aria-hidden', 'false');
+        confirmBtn.focus();
+    };
+
+    cancelBtn.addEventListener('click', close);
+    confirmBtn.addEventListener('click', () => {
+        close();
+        onConfirm();
+    });
+    dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) close();
+    });
+
+    return { open, close };
 }

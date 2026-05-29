@@ -77,7 +77,8 @@ p {
     gap: 10px;
 }
 
-a {
+a,
+.login-actions button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -96,7 +97,8 @@ a {
     transition: transform 0.22s var(--ease), box-shadow 0.22s var(--ease), background-color 0.22s var(--ease), border-color 0.22s var(--ease);
 }
 
-a.primary {
+a.primary,
+.login-actions .primary {
     border-color: var(--primary);
     background: var(--primary);
     color: #ffffff;
@@ -109,12 +111,14 @@ a.primary::after {
     transition: transform 0.22s var(--ease);
 }
 
-a:hover {
+a:hover,
+.login-actions button:hover {
     transform: translateY(-1px);
     box-shadow: var(--shadow-lg);
 }
 
-a.primary:hover {
+a.primary:hover,
+.login-actions .primary:hover {
     background: var(--primary-hover);
     border-color: var(--primary-hover);
 }
@@ -126,6 +130,100 @@ a.primary:hover::after {
 a:focus-visible {
     outline: 3px solid rgba(111, 75, 46, 0.22);
     outline-offset: 3px;
+}
+
+.login-dialog {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(48, 39, 31, 0.38);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s var(--ease);
+}
+
+.login-dialog.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.login-card {
+    width: min(380px, 100%);
+    display: grid;
+    gap: 12px;
+    padding: 24px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: #ffffff;
+    box-shadow: var(--shadow-lg);
+}
+
+.login-label,
+.login-field,
+.login-status,
+.login-actions button {
+    font-family: var(--ui-font);
+}
+
+.login-label {
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.login-title {
+    margin-bottom: 4px;
+    color: var(--ink);
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.login-field {
+    display: grid;
+    gap: 6px;
+}
+
+.login-field span {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.login-field input {
+    min-height: 42px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--ink);
+    font: inherit;
+}
+
+.login-status {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.login-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.login-actions button {
+    min-height: 40px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.login-actions .secondary {
+    background: #ffffff;
+    color: var(--primary);
 }
 
 @media (max-width: 520px) {

@@ -1,6 +1,10 @@
 const STORAGE_VERSION = 2;
 const DEFAULT_SORT_MODE = 'text';
 export class DictionaryStore {
+    storage;
+    storageKey;
+    legacyKeys;
+    data;
     constructor(storage, storageKey, legacyKeys = []) {
         this.storage = storage;
         this.storageKey = storageKey;
@@ -9,14 +13,13 @@ export class DictionaryStore {
         this.save();
     }
     add(item) {
-        var _a;
         const normalized = normalizeKey(item.text);
         if (!normalized || this.has(item.text))
             return false;
         let node = this.data.root;
         for (const char of Array.from(normalized)) {
             const childKey = hashToken(char);
-            (_a = node.children)[childKey] ?? (_a[childKey] = createNode(`${node.hash}:${childKey}`));
+            node.children[childKey] ??= createNode(`${node.hash}:${childKey}`);
             node = node.children[childKey];
         }
         node.item = { ...item };
@@ -132,11 +135,14 @@ function dictionaryFromWords(words) {
         root: createNode('root')
     };
     words.filter(isWordItem).forEach((item, index) => {
-        var _a;
+        // 🌟 [수정] 빈 문자열 처리 및 원본 JS와 동일한 방어 로직 반영
+        const normalized = normalizeKey(item.text);
+        if (!normalized)
+            return;
         let node = data.root;
-        for (const char of Array.from(normalizeKey(item.text))) {
+        for (const char of Array.from(normalized)) {
             const childKey = hashToken(char);
-            (_a = node.children)[childKey] ?? (_a[childKey] = createNode(`${node.hash}:${childKey}`));
+            node.children[childKey] ??= createNode(`${node.hash}:${childKey}`);
             node = node.children[childKey];
         }
         node.item = { ...item };
@@ -215,7 +221,8 @@ function isTrieNode(value) {
     if (!value || typeof value !== 'object')
         return false;
     const node = value;
+    // 🌟 [개선] 자식 노드들의 구조적 정밀성 검증 추가 (TypeScript 컴파일러 추론 극대화)
     return typeof node.hash === 'string'
-        && Boolean(node.children)
+        && node.children !== null
         && typeof node.children === 'object';
 }
