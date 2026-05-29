@@ -4,18 +4,18 @@ const PUNCTUATION = new Set([
     '‘', '’', '(', ')', '！', '？', '!', '?', '：', ':', ';', '—', '-'
 ]);
 export function renderReader(words, viewerArea, onSaveRequest, savedWords = []) {
-    // 🌟 [핵심 개선] 재렌더링 시 기존에 사용자가 클릭해서 열어둔 단어들의 해독 단계(stage)를 임시 보관합니다.
+    // 🌟 [개선] 단어 텍스트 대신 '순서(인덱스)'를 기반으로 개별 단어의 stage 상태를 백업합니다.
     const stageBackup = {};
     const existingSpans = viewerArea.querySelectorAll('span.playable');
-    existingSpans.forEach((el) => {
+    existingSpans.forEach((el, index) => {
         const span = el;
-        const textKey = span.textContent || '';
         const stageVal = span.dataset.stage || '0';
-        if (textKey && stageVal !== '0') {
-            stageBackup[textKey] = stageVal; // 예: {"요미마시타": "2"}
+        if (stageVal !== '0') {
+            stageBackup[index] = stageVal; // 예: { 3: "1" } -> 4번째 단어가 1단계 상태임 의미
         }
     });
     viewerArea.innerHTML = '';
+    let playableIndex = 0; // 🌟 playable 요소들의 순서를 매기기 위한 고유 카운터
     words.forEach((wordData) => {
         const [type, text, kana, original, originalKana, contextMean, mean] = wordData;
         const pronunciation = kana || '';
@@ -39,12 +39,14 @@ export function renderReader(words, viewerArea, onSaveRequest, savedWords = []) 
             return;
         }
         span.classList.add('playable');
-        // 🌟 [핵심 개선] 이전에 열려 있던 단어라면, 백업해둔 해독 단계(stage)를 복원합니다.
-        const savedStage = stageBackup[text] || '0';
+        // 🌟 [개선] 백업해둔 고유 순서(인덱스)의 stage 단계를 정확히 매칭하여 복원합니다.
+        const savedStage = stageBackup[playableIndex] || '0';
         span.dataset.stage = savedStage;
         // 복원된 stage 단계에 맞게 UI 클래스와 힌트 텍스트 복구하기
         const isPronunciationOmitted = !pronunciation.trim() || text === pronunciation;
         restoreStageUI(span, Number.parseInt(savedStage, 10), isPronunciationOmitted, type, pronunciation, displayMean);
+        // 🌟 복원 처리가 끝난 뒤 카운터를 증가시킵니다.
+        playableIndex++;
         span.addEventListener('click', function () {
             let stage = Number.parseInt(this.dataset.stage || '0', 10);
             this.classList.remove('stage-1', 'stage-2', 'stage-3');
