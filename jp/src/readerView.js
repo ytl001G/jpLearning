@@ -299,23 +299,27 @@ export function createSaveDialog(word, onConfirm) {
     const dialog = document.createElement('div');
     dialog.className = 'word-save-dialog';
     dialog.setAttribute('aria-hidden', 'true');
-    // 요미가나(발음)가 있으면 괄호 서식 추가
-    const kanaBadge = word.kana ? ` <span class="dialog-word-kana">[${word.kana}]</span>` : '';
+    // 요미가나와 뜻이 둘 다 있을 때 가운뎃점(·)으로 연결 처리
+    const hintText = [word.kana, word.mean].filter(Boolean).join(' · ');
     dialog.innerHTML = `
         <div class="word-save-card" role="dialog" aria-modal="true" aria-labelledby="save-dialog-title">
-            <div class="word-save-label">단어장 저장 확인</div>
+            <div class="word-save-label" style="background: transparent; color: #6b4e3d; padding: 0; font-weight: 700;">단어 안내</div>
             
-            <div class="dialog-preview-box">
-                <span class="dialog-checkbox-icon">❑</span>
-                <span class="dialog-word-text" id="save-dialog-title">${word.text}</span>
-                ${kanaBadge}
-                <span class="dialog-word-mean">${word.mean}</span>
+            <div class="word-save-title" id="save-dialog-title" style="font-size: 32px; margin: 8px 0 4px 0; font-weight: 700;">
+                ${word.text}
             </div>
             
-            <div class="word-save-message">이 단어를 단어장에 보관할까요?</div>
+            <div class="word-save-meta" style="font-size: 16px; color: #7a7a7a; margin-bottom: 24px; background: none; padding: 0; border: none;">
+                ${hintText}
+            </div>
+            
+            <div class="word-save-message" style="font-size: 16px; color: #222; margin-bottom: 24px;">
+                이 단어를 모르는 단어장에 보관할까요?
+            </div>
+            
             <div class="word-save-actions">
-                <button type="button" class="word-save-cancel">취소</button>
-                <button type="button" class="word-save-confirm">저장하기</button>
+                <button type="button" class="word-save-cancel">나중에</button>
+                <button type="button" class="word-save-confirm" style="background-color: #6b4e3d; color: #fff;">보관하기</button>
             </div>
         </div>
     `;
@@ -323,10 +327,9 @@ export function createSaveDialog(word, onConfirm) {
     const cancelBtn = dialog.querySelector('.word-save-cancel');
     const confirmBtn = dialog.querySelector('.word-save-confirm');
     const close = () => {
-        dialog.classList.add('hide'); // 부드러운 아웃 애니메이션용 (선택)
         dialog.classList.remove('show');
         dialog.setAttribute('aria-hidden', 'true');
-        setTimeout(() => dialog.remove(), 250);
+        setTimeout(() => dialog.remove(), 200);
     };
     const open = () => {
         dialog.classList.add('show');
@@ -334,7 +337,7 @@ export function createSaveDialog(word, onConfirm) {
         confirmBtn.focus();
     };
     cancelBtn.addEventListener('click', close);
-    // 🌟 인풋값이 없으므로 원본 사전형 데이터(word)를 그대로 콜백에 태워 보냅니다.
+    // 🌟 사용자가 수정한 인풋값이 없으므로, 사전에서 파싱된 원본 word 객체를 그대로 confirm 콜백에 실어 보냅니다.
     confirmBtn.addEventListener('click', () => {
         close();
         onConfirm(word);

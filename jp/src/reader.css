@@ -1230,50 +1230,91 @@ h2::after {
         transform: translateY(4px) scale(1) !important;
     }
 }
-.word-save-card {
-    text-align: left; /* 가운데 정렬에서 좌측 정렬로 변경하여 사전 느낌 강조 */
+
+/* 팝업 카드 전체 스타일 (여백 축소) */
+.word-save-dialog .word-save-card {
+    padding: 24px 28px; /* 32px 36px -> 24px 28px로 축소 */
+    border-radius: 14px;
+    background: #ffffff;
+    text-align: left;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    max-width: 360px; /* 너비도 살짝 슬림하게 변경 */
+    width: 90%;
 }
 
-/* 첫 번째 스크린샷 느낌을 재현한 미색 요약 박스 */
-.dialog-preview-box {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 14px 18px;
-    background: var(--bg-reader, #fffaf1);
-    border: 1px solid var(--line, #e5d8c8);
-    border-radius: var(--radius-sm, 6px);
-    margin: 12px 0 18px 0;
-    font-family: var(--serif-font);
-}
-
-.dialog-checkbox-icon {
-    color: var(--faint, #a99a8b);
-    font-size: 16px;
-    margin-right: 2px;
-}
-
-.dialog-word-text {
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--ink, #30271f);
-}
-
-.dialog-word-kana {
-    font-size: 15px;
-    color: var(--hint-kana, #2b6f86);
-    font-weight: 500;
-}
-
-.dialog-word-mean {
-    font-size: 16px;
-    color: var(--muted, #776b60);
-    margin-left: 4px;
-}
-
-.word-save-message {
+/* 상단 라벨 (단어 안내) */
+.word-save-dialog .word-save-label {
     font-family: var(--ui-font);
-    font-size: 13px;
-    color: var(--faint);
-    margin-bottom: 16px;
+    font-size: 13px; /* 14px -> 13px */
+    color: #6b4e3d;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+/* 표제어 (큰 단어 원형) */
+.word-save-dialog .word-save-title {
+    font-family: var(--serif-font);
+    font-size: 26px; /* 32px -> 26px로 대폭 축소 */
+    font-weight: 700;
+    color: #222222;
+    margin: 0 0 4px 0;
+    line-height: 1.2;
+}
+
+/* 요미가나 및 뜻 (가운뎃점 서브 텍스트) */
+.word-save-dialog .word-save-meta {
+    font-family: var(--serif-font);
+    font-size: 14px; /* 16px -> 14px */
+    color: #7a7a7a;
+    margin-bottom: 18px; /* 여백 줄임 */
+    line-height: 1.4;
+}
+
+/* 안내 메시지 (이 단어를 모르는 단어장에 보관할까요?) */
+.word-save-dialog .word-save-message {
+    font-family: var(--ui-font);
+    font-size: 14px; /* 16px -> 14px */
+    color: #222222;
+    margin-bottom: 20px; /* 여백 줄임 */
+}
+
+/* 버튼 컨테이너 */
+.word-save-dialog .word-save-actions {
+    display: flex;
+    justify-content: flex-end; 
+    gap: 10px;
+}
+
+/* [나중에] 버튼 스타일 */
+.word-save-dialog .word-save-cancel {
+    font-family: var(--ui-font);
+    background: #ffffff;
+    border: 1px solid #e2d7cd;
+    color: #555555;
+    padding: 8px 20px; /* 버튼 크기 축소 */
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 14px; /* 15px -> 14px */
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.word-save-dialog .word-save-cancel:hover {
+    background: #faf6f2;
+}
+
+/* [보관하기] 버튼 스타일 */
+.word-save-dialog .word-save-confirm {
+    font-family: var(--ui-font);
+    background-color: #6b4e3d;
+    color: #ffffff;
+    border: none;
+    padding: 8px 20px; /* 버튼 크기 축소 */
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 14px; /* 15px -> 14px */
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+.word-save-dialog .word-save-confirm:hover {
+    opacity: 0.9;
 }
