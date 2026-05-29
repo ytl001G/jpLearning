@@ -408,6 +408,11 @@ h2::after {
     color: #ffffff;
 }
 
+.sync-btn.danger {
+    border-color: rgba(169, 67, 78, 0.34);
+    color: var(--danger);
+}
+
 .sync-btn:hover {
     border-color: var(--line-strong);
     box-shadow: var(--shadow-md);
@@ -416,6 +421,11 @@ h2::after {
 
 .sync-btn.primary:hover {
     background: var(--primary-hover);
+}
+
+.sync-btn.danger:hover {
+    border-color: var(--danger);
+    background: rgba(169, 67, 78, 0.08);
 }
 
 .sync-status {

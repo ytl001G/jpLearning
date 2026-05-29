@@ -5,7 +5,7 @@
 [debug] [2026-05-29T10:19:08.492Z] Node Version:  v22.16.0
 [debug] [2026-05-29T10:19:08.492Z] Time:          Fri May 29 2026 19:19:08 GMT+0900 (대한민국 표준시)
 [debug] [2026-05-29T10:19:08.493Z] ----------------------------------------------------------------------
-[debug] 
+[debug]
 [debug] [2026-05-29T10:19:11.040Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
 [debug] [2026-05-29T10:19:11.041Z] > authorizing via signed-in user (izonelove2@gmail.com)
 [debug] [2026-05-29T10:19:11.041Z] [iam] checking project jplearning-2dbfb for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]

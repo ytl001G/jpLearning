@@ -4,7 +4,7 @@ interface FirebaseConfig {
 }
 
 interface WordbookNode {
-  hash: string;
+  key: string;
   children: Record<string, any>; 
 }
 
@@ -32,7 +32,7 @@ interface FirebaseModuleWrapper {
 // -------------------------------------------------------------------------
 
 const SESSION_KEY = 'jp_wordbook_session';
-const CONFIG_URL = new URL('./jp/src/firebaseConfig.js', import.meta.url).href;
+const CONFIG_URL = new URL('./firebaseConfig.js', import.meta.url).href;
 
 const entryLink = document.getElementById('jp-entry-link') as HTMLAnchorElement | null;
 const dialog = document.getElementById('jp-login-dialog') as HTMLElement | null;
@@ -54,7 +54,11 @@ if (entryLink && dialog && form && cancelBtn && userIdInput && passwordInput && 
     if (savedSession) {
       try {
         const session = JSON.parse(savedSession);
-        if (session.userId && session.passwordHash) {
+        if (
+          typeof session.userId === 'string'
+          && typeof session.passwordHash === 'string'
+          && /^[a-f0-9]{64}$/.test(session.passwordHash)
+        ) {
           // 2. 이미 로그인 기록이 있다면 팝업을 띄우지 않고 바로 단어장으로 이동합니다.
           window.location.href = entryLink.href;
           return; 
@@ -93,10 +97,10 @@ if (entryLink && dialog && form && cancelBtn && userIdInput && passwordInput && 
     setBusy(true);
 
     try {
-      const passwordHash = await createPasswordHash(password);
+      const passwordHash = await createPasswordHash(userId, password);
       await verifyOrCreateWordbook(userId, passwordHash);
       
-      // 기존 sessionStorage 대신 localStorage를 사용하여 로그인이 반영구적으로 유지되도록 합니다.
+      // 로그인 유지에는 해시된 계정 정보만 저장합니다. 원문 비밀번호는 저장하지 않습니다.
       localStorage.setItem(SESSION_KEY, JSON.stringify({ userId, passwordHash }));
       
       window.location.href = entryLink.href;
@@ -129,6 +133,7 @@ if (entryLink && dialog && form && cancelBtn && userIdInput && passwordInput && 
       (element as HTMLButtonElement | HTMLInputElement).disabled = isBusy;
     });
   }
+
 }
 
 async function verifyOrCreateWordbook(userId: string, passwordHash: string): Promise<void> {
@@ -200,7 +205,7 @@ function getHomeFirebaseErrorMessage(error: unknown): string {
   }
 
   if (code === 'permission-denied') {
-    return 'Firestore 규칙이 아직 사이트 방식과 맞지 않습니다. 수정한 firestore.rules를 배포해 주세요.';
+    return 'Firestore 규칙이 아직 사이트 방식과 맞지 않습니다. 수정한 firebase/firestore.rules를 배포해 주세요.';
   }
 
   if (code === 'auth/network-request-failed' || code === 'unavailable') {
@@ -210,24 +215,35 @@ function getHomeFirebaseErrorMessage(error: unknown): string {
   return `Firebase 연결에 실패했습니다. (${code || error.message})`;
 }
 
-async function createPasswordHash(password: string): Promise<string> {
-  const input = new TextEncoder().encode(password);
-  const hash = await crypto.subtle.digest('SHA-256', input);
-  return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
+async function createPasswordHash(userId: string, password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: encoder.encode(`jp-wordbook-password:${userId.trim()}`),
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    baseKey,
+    256
+  );
+  return bytesToHex(new Uint8Array(bits));
 }
 
-function createNode(hashSource: string): WordbookNode {
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function createNode(key: string): WordbookNode {
   return {
-    hash: hashToken(hashSource),
+    key,
     children: {}
   };
-}
-
-function hashToken(value: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0');
 }

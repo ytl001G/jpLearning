@@ -13,7 +13,7 @@ import {
 } from './utils.js';
 import type { DictionarySortMode, JsonData, WordItem } from './utils.js';
 
-document.addEventListener('DOMContentLoaded', (): void => {
+document.addEventListener('DOMContentLoaded', async (): Promise<void> => {
     const inputPage = document.getElementById('input-page') as HTMLDivElement;
     const viewerPage = document.getElementById('viewer-page') as HTMLDivElement;
     const viewerArea = document.getElementById('viewer-area') as HTMLDivElement;
@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
     const addWordSubmit = document.getElementById('add-word-submit') as HTMLButtonElement;
     const syncLogoutBtn = document.getElementById('sync-logout-btn') as HTMLButtonElement;
     const syncNowBtn = document.getElementById('sync-now-btn') as HTMLButtonElement;
+    const syncDeleteAccountBtn = document.getElementById('sync-delete-account-btn') as HTMLButtonElement;
     const syncAccountLabel = document.getElementById('sync-account-label') as HTMLDivElement;
     const syncStatus = document.getElementById('sync-status') as HTMLDivElement;
 
@@ -49,18 +50,32 @@ document.addEventListener('DOMContentLoaded', (): void => {
 
     const storageKey = document.body.dataset.storageKey || 'forgotten_japanese_words_ko';
     const sessionKey = 'jp_wordbook_session';
-    const firebaseConfigSrc = new URL('./firebaseConfig.js', import.meta.url).href;
-    const dictionary = new DictionaryStore(localStorage, storageKey, ['forgotten_words_ko']);
+    const firebaseConfigSrc = new URL('../../src/firebaseConfig.js', import.meta.url).href;
+
     let promptContentText = '';
     let exampleJsonText = '';
     let syncSession: { userId: string; passwordHash: string } | null = null;
     let autoSaveTimer: number | undefined;
     let isApplyingRemoteDictionary = false;
-    
     let latestJsonWords: any[] = [];
 
-    const saveDialog = createSaveDialog((word) => {
-        if (dictionary.add(word)) {
+    const session = readHomeSession();
+    if (!session) {
+        setSyncStatus('홈에서 일본어 단어장 로그인을 먼저 해 주세요.');
+        window.setTimeout(() => {
+            window.location.href = '../';
+        }, 900);
+        return;
+    }
+
+    syncSession = session;
+    syncAccountLabel.textContent = `${session.userId}의 단어장`;
+
+    const dictionary = new DictionaryStore(localStorage, storageKey, ['forgotten_words_ko']);
+    await dictionary.init();
+
+    const saveDialog = createSaveDialog(async (word) => {
+        if (await dictionary.add(word)) {
             refreshWordbook();
             if (latestJsonWords.length > 0) {
                 renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
@@ -70,8 +85,8 @@ document.addEventListener('DOMContentLoaded', (): void => {
         }
     });
 
-    const clearDialog = createClearDialog(() => {
-        dictionary.clear();
+    const clearDialog = createClearDialog(async () => {
+        await dictionary.clear();
         refreshWordbook();
         if (latestJsonWords.length > 0) {
             renderReader(latestJsonWords, viewerArea, askAndSave, []);
@@ -82,6 +97,9 @@ document.addEventListener('DOMContentLoaded', (): void => {
 
     const syncConfirmDialog = createSyncConfirmDialog(() => {
         uploadCurrentDictionaryFromSyncDialog();
+    });
+    const accountDeleteDialog = createAccountDeleteDialog(() => {
+        deleteAccountFromDialog();
     });
 
     sortSelect.value = dictionary.getSortMode();
@@ -132,7 +150,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
         setReaderSupportVisible(true);
     });
 
-    addWordSubmit.addEventListener('click', (): void => {
+    addWordSubmit.addEventListener('click', async (): Promise<void> => {
         const word: WordItem = {
             text: addJp.value.trim(),
             kana: addKana.value.trim(),
@@ -144,7 +162,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
             return;
         }
 
-        if (!dictionary.add(word)) {
+        if (!(await dictionary.add(word))) {
             showToast('이미 추가된 단어입니다.', true);
             return;
         }
@@ -166,8 +184,8 @@ document.addEventListener('DOMContentLoaded', (): void => {
         clearDialog.open();
     });
 
-    sortSelect.addEventListener('change', (): void => {
-        dictionary.setSortMode(sortSelect.value as DictionarySortMode);
+    sortSelect.addEventListener('change', async (): Promise<void> => {
+        await dictionary.setSortMode(sortSelect.value as DictionarySortMode);
         refreshWordbook();
         scheduleAutoSave();
     });
@@ -188,14 +206,18 @@ document.addEventListener('DOMContentLoaded', (): void => {
         syncNow();
     });
 
+    syncDeleteAccountBtn.addEventListener('click', (): void => {
+        accountDeleteDialog.open();
+    });
+
     function refreshWordbook(): void {
         const words = dictionary.getAll();
         renderWordbook(wordbookContainer, words, removeWord);
         studyCard.setWords(words);
     }
 
-    function removeWord(text: string): void {
-        if (!dictionary.remove(text)) return;
+    async function removeWord(text: string): Promise<void> {
+        if (!(await dictionary.remove(text))) return;
         refreshWordbook();
         
         if (latestJsonWords.length > 0) {
@@ -218,22 +240,12 @@ document.addEventListener('DOMContentLoaded', (): void => {
     }
 
     async function restoreSessionFromHome(): Promise<void> {
-        const session = readHomeSession();
-        if (!session) {
-            setSyncStatus('홈에서 일본어 단어장 로그인을 먼저 해 주세요.');
-            window.setTimeout(() => {
-                window.location.href = '../';
-            }, 900);
-            return;
-        }
-
-        syncSession = session;
-        syncAccountLabel.textContent = `${session.userId}의 단어장`;
+        if (!syncSession) return;
         setSyncBusy(true, '단어장 불러오는 중...');
 
         try {
             await loadLoggedInDictionary();
-            setSyncStatus(`${session.userId}의 단어장에 로그인했습니다. 변경 사항은 자동 저장됩니다.`);
+            setSyncStatus(`${syncSession.userId}의 단어장에 로그인했습니다. 변경 사항은 자동 저장됩니다.`);
             showToast('단어장을 불러왔습니다.');
         } catch (error) {
             console.error('Firebase wordbook load failed:', error);
@@ -269,17 +281,15 @@ document.addEventListener('DOMContentLoaded', (): void => {
         if (!syncSession) throw new Error('not_logged_in');
         const firebase = await loadFirebaseSync();
         
-        // 🔒 [안전 패치] 데이터 조회 전 Firebase Auth 익명 로그인 세션 생성하여 규칙 통과 준비
         await firebase.signInAnonymously(firebase.auth);
 
-        // 문서 ID(userId)와 요청 세션이 준비되어 규칙의 `request.auth != null && userId == ...` 조건을 우회/충족합니다.
         const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
         const snapshot = await firebase.getDoc(documentRef);
         if (!snapshot.exists()) throw new Error('not_found');
 
         const data = snapshot.data();
         if (data.passwordHash !== syncSession.passwordHash) throw new Error('wrong_password');
-        if (!dictionary.importData(data.dictionary)) throw new Error('invalid_data');
+        if (!(await dictionary.importData(data.dictionary))) throw new Error('invalid_data');
         isApplyingRemoteDictionary = true;
         sortSelect.value = dictionary.getSortMode();
         sortSelect.dispatchEvent(new Event('change', { bubbles: true }));
@@ -295,7 +305,6 @@ document.addEventListener('DOMContentLoaded', (): void => {
         if (!syncSession) return;
 
         const firebase = await loadFirebaseSync();
-        // 🔒 [안전 패치] 저장 시에도 세션이 없을 경우 대비하여 토큰 확보 및 동기화
         await firebase.signInAnonymously(firebase.auth);
 
         const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
@@ -347,6 +356,37 @@ document.addEventListener('DOMContentLoaded', (): void => {
             showToast('현재 단어장을 서버에 저장했습니다.');
         } catch (error) {
             console.error('Firebase wordbook upload failed:', error);
+            const message = getSyncErrorMessage(error);
+            setSyncStatus(message);
+            showToast(message, true);
+        } finally {
+            setSyncBusy(false);
+        }
+    }
+
+    async function deleteAccountFromDialog(): Promise<void> {
+        if (!requireSyncSession() || !syncSession) return;
+        if (autoSaveTimer) {
+            window.clearTimeout(autoSaveTimer);
+            autoSaveTimer = undefined;
+        }
+
+        setSyncBusy(true, '계정 삭제 중...');
+        try {
+            const firebase = await loadFirebaseSync();
+            await firebase.signInAnonymously(firebase.auth);
+            const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
+            await firebase.deleteDoc(documentRef);
+
+            localStorage.removeItem(sessionKey);
+            localStorage.removeItem(storageKey);
+            localStorage.removeItem('forgotten_words_ko');
+            syncSession = null;
+            showToast('Firebase 단어장 계정을 삭제했습니다.');
+            setSyncStatus('계정을 삭제했습니다. 홈으로 이동합니다.');
+            window.location.href = '../';
+        } catch (error) {
+            console.error('Firebase account delete failed:', error);
             const message = getSyncErrorMessage(error);
             setSyncStatus(message);
             showToast(message, true);
@@ -466,13 +506,13 @@ document.addEventListener('DOMContentLoaded', (): void => {
         window.location.href = '../';
     }
 
-    // 🔒 [핵심 변경 및 안전 패치] 동적 CDN 모듈 로드 시 Firebase Auth 시스템도 함께 초기화되도록 바인딩을 확장했습니다.
     async function loadFirebaseSync(): Promise<{
         db: unknown;
         auth: unknown;
         doc: (...args: unknown[]) => unknown;
         getDoc: (ref: unknown) => Promise<{ exists: () => boolean; data: () => any }>;
         setDoc: (ref: unknown, data: unknown) => Promise<void>;
+        deleteDoc: (ref: unknown) => Promise<void>;
         signInAnonymously: (auth: any) => Promise<any>;
     }> {
         const configModule = await import(firebaseConfigSrc);
@@ -500,6 +540,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
             doc: firestoreModule.doc,
             getDoc: firestoreModule.getDoc,
             setDoc: firestoreModule.setDoc,
+            deleteDoc: firestoreModule.deleteDoc,
             signInAnonymously: authModule.signInAnonymously
         };
     }
@@ -524,7 +565,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
         }
 
         if (error.message === 'firebase_not_configured') {
-            return 'Firebase 설정값을 jp/src/firebaseConfig.js에 먼저 입력해 주세요.';
+            return 'Firebase 설정값을 src/firebaseConfig.js에 먼저 입력해 주세요.';
         }
 
         if (error.message === 'wrong_password') {
@@ -540,7 +581,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
         }
 
         if (code === 'permission-denied') {
-            return 'Firestore 규칙이 아직 사이트 방식과 맞지 않습니다. 수정한 firestore.rules를 배포해 주세요.';
+            return 'Firestore 규칙이 아직 사이트 방식과 맞지 않습니다. 수정한 firebase/firestore.rules를 배포해 주세요.';
         }
 
         if (code === 'auth/network-request-failed' || code === 'unavailable') {
@@ -557,6 +598,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
     function setSyncBusy(isBusy: boolean, message?: string): void {
         syncLogoutBtn.disabled = isBusy;
         syncNowBtn.disabled = isBusy;
+        syncDeleteAccountBtn.disabled = isBusy;
         if (message) setSyncStatus(message);
     }
 
@@ -607,6 +649,7 @@ function copyLoadedText(text: string, button: HTMLButtonElement, defaultLabel: s
     });
 }
 
+// @ts-ignore
 function setupSortDropdown(select: HTMLSelectElement): void {
     const wrapper = document.createElement('div');
     const trigger = document.createElement('button');
@@ -712,6 +755,53 @@ function createSyncConfirmDialog(onConfirm: () => void): {
         dialog.classList.add('show');
         dialog.setAttribute('aria-hidden', 'false');
         confirmBtn.focus();
+    };
+
+    cancelBtn.addEventListener('click', close);
+    confirmBtn.addEventListener('click', () => {
+        close();
+        onConfirm();
+    });
+    dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) close();
+    });
+
+    return { open, close };
+}
+
+function createAccountDeleteDialog(onConfirm: () => void): {
+    open: () => void;
+    close: () => void;
+} {
+    const dialog = document.createElement('div');
+    dialog.className = 'word-save-dialog';
+    dialog.setAttribute('aria-hidden', 'true');
+    dialog.innerHTML = `
+        <div class="word-save-card clear-card" role="dialog" aria-modal="true" aria-labelledby="account-delete-dialog-title">
+            <div class="word-save-label danger-label">계정 삭제</div>
+            <div class="word-save-title" id="account-delete-dialog-title">Firebase 계정을 삭제할까요?</div>
+            <div class="word-save-message">서버에 저장된 단어장 계정과 이 기기의 로그인 기록이 삭제됩니다. 이 작업은 되돌릴 수 없습니다.</div>
+            <div class="word-save-actions">
+                <button type="button" class="word-save-cancel">취소</button>
+                <button type="button" class="word-clear-confirm">삭제하기</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(dialog);
+
+    const cancelBtn = dialog.querySelector('.word-save-cancel') as HTMLButtonElement;
+    const confirmBtn = dialog.querySelector('.word-clear-confirm') as HTMLButtonElement;
+
+    const close = (): void => {
+        dialog.classList.remove('show');
+        dialog.setAttribute('aria-hidden', 'true');
+    };
+
+    const open = (): void => {
+        dialog.classList.add('show');
+        dialog.setAttribute('aria-hidden', 'false');
+        cancelBtn.focus();
     };
 
     cancelBtn.addEventListener('click', close);

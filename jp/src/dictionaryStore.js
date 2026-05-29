@@ -1,33 +1,31 @@
 const STORAGE_VERSION = 2;
 const DEFAULT_SORT_MODE = 'text';
 export class DictionaryStore {
-    storage;
-    storageKey;
-    legacyKeys;
-    data;
     constructor(storage, storageKey, legacyKeys = []) {
         this.storage = storage;
         this.storageKey = storageKey;
         this.legacyKeys = legacyKeys;
-        this.data = this.load();
-        this.save();
     }
-    add(item) {
+    async init() {
+        this.data = await this.load();
+        await this.save();
+    }
+    async add(item) {
+        var _a;
         const normalized = normalizeKey(item.text);
         if (!normalized || this.has(item.text))
             return false;
         let node = this.data.root;
         for (const char of Array.from(normalized)) {
-            const childKey = hashToken(char);
-            node.children[childKey] ??= createNode(`${node.hash}:${childKey}`);
-            node = node.children[childKey];
+            (_a = node.children)[char] ?? (_a[char] = createNode(char));
+            node = node.children[char];
         }
         node.item = { ...item };
         node.insertedAt = Date.now();
-        this.save();
+        await this.save();
         return true;
     }
-    remove(text) {
+    async remove(text) {
         const path = this.findPath(text);
         if (!path)
             return false;
@@ -40,12 +38,12 @@ export class DictionaryStore {
                 break;
             delete path[i - 1].node.children[key];
         }
-        this.save();
+        await this.save();
         return true;
     }
-    clear() {
+    async clear() {
         this.data.root = createNode('root');
-        this.save();
+        await this.save();
     }
     has(text) {
         return Boolean(this.get(text));
@@ -58,9 +56,9 @@ export class DictionaryStore {
     getSortMode() {
         return this.data.sortMode;
     }
-    setSortMode(sortMode) {
+    async setSortMode(sortMode) {
         this.data.sortMode = sortMode;
-        this.save();
+        await this.save();
     }
     getAll(sortMode = this.data.sortMode) {
         return this.entries()
@@ -73,11 +71,12 @@ export class DictionaryStore {
     exportData() {
         return JSON.parse(JSON.stringify(this.data));
     }
-    importData(data) {
-        if (!isStoredDictionary(data))
+    async importData(data) {
+        const normalized = normalizeStoredDictionary(data);
+        if (!normalized)
             return false;
-        this.data = data;
-        this.save();
+        this.data = normalized;
+        await this.save();
         return true;
     }
     findPath(text) {
@@ -87,12 +86,11 @@ export class DictionaryStore {
         const path = [{ key: '', node: this.data.root }];
         let node = this.data.root;
         for (const char of Array.from(normalized)) {
-            const childKey = hashToken(char);
-            const next = node.children[childKey];
+            const next = node.children[char];
             if (!next)
                 return null;
             node = next;
-            path.push({ key: childKey, node });
+            path.push({ key: char, node });
         }
         return path;
     }
@@ -101,22 +99,20 @@ export class DictionaryStore {
         walkTrie(this.data.root, output);
         return output;
     }
-    load() {
+    async load() {
         const raw = this.storage.getItem(this.storageKey);
         if (raw) {
-            const parsed = safeParse(raw);
-            if (isStoredDictionary(parsed))
+            const parsed = parseStoredText(raw);
+            if (parsed)
                 return parsed;
-            if (Array.isArray(parsed))
-                return dictionaryFromWords(parsed);
         }
         for (const key of this.legacyKeys) {
             const legacyRaw = this.storage.getItem(key);
             if (!legacyRaw)
                 continue;
-            const legacyParsed = safeParse(legacyRaw);
-            if (Array.isArray(legacyParsed))
-                return dictionaryFromWords(legacyParsed);
+            const legacyParsed = parseStoredText(legacyRaw);
+            if (legacyParsed)
+                return legacyParsed;
         }
         return {
             version: STORAGE_VERSION,
@@ -124,7 +120,7 @@ export class DictionaryStore {
             root: createNode('root')
         };
     }
-    save() {
+    async save() {
         this.storage.setItem(this.storageKey, JSON.stringify(this.data));
     }
 }
@@ -135,20 +131,61 @@ function dictionaryFromWords(words) {
         root: createNode('root')
     };
     words.filter(isWordItem).forEach((item, index) => {
-        // 🌟 [수정] 빈 문자열 처리 및 원본 JS와 동일한 방어 로직 반영
+        var _a;
         const normalized = normalizeKey(item.text);
         if (!normalized)
             return;
         let node = data.root;
         for (const char of Array.from(normalized)) {
-            const childKey = hashToken(char);
-            node.children[childKey] ??= createNode(`${node.hash}:${childKey}`);
-            node = node.children[childKey];
+            (_a = node.children)[char] ?? (_a[char] = createNode(char));
+            node = node.children[char];
         }
         node.item = { ...item };
         node.insertedAt = index;
     });
     return data;
+}
+function parseStoredText(text) {
+    if (!text)
+        return null;
+    const parsed = safeParse(text);
+    const normalized = normalizeStoredDictionary(parsed);
+    if (normalized)
+        return normalized;
+    if (Array.isArray(parsed))
+        return dictionaryFromWords(parsed);
+    return null;
+}
+function normalizeStoredDictionary(data) {
+    if (!data || typeof data !== 'object')
+        return null;
+    if (isStoredDictionary(data))
+        return data;
+    const record = data;
+    if (record.version !== STORAGE_VERSION || !isSortMode(record.sortMode) || !record.root)
+        return null;
+    const entries = [];
+    collectEntries(record.root, entries);
+    const words = entries
+        .sort((a, b) => a.insertedAt - b.insertedAt)
+        .map((entry) => entry.item);
+    const normalized = dictionaryFromWords(words);
+    normalized.sortMode = record.sortMode;
+    return normalized;
+}
+function collectEntries(node, output) {
+    if (!node || typeof node !== 'object')
+        return;
+    const trieNode = node;
+    if (isWordItem(trieNode.item)) {
+        output.push({
+            item: trieNode.item,
+            insertedAt: typeof trieNode.insertedAt === 'number' ? trieNode.insertedAt : output.length
+        });
+    }
+    if (!trieNode.children || typeof trieNode.children !== 'object')
+        return;
+    Object.values(trieNode.children).forEach((child) => collectEntries(child, output));
 }
 function walkTrie(node, output) {
     if (node.item) {
@@ -176,25 +213,17 @@ function sortValue(item, sortMode) {
 function normalizeKey(text) {
     return text.trim().normalize('NFKC');
 }
-function createNode(hashSource) {
+function createNode(key) {
     return {
-        hash: hashToken(hashSource),
+        key: key,
         children: {}
     };
-}
-function hashToken(value) {
-    let hash = 0x811c9dc5;
-    for (let i = 0; i < value.length; i++) {
-        hash ^= value.charCodeAt(i);
-        hash = Math.imul(hash, 0x01000193);
-    }
-    return (hash >>> 0).toString(16).padStart(8, '0');
 }
 function safeParse(raw) {
     try {
         return JSON.parse(raw);
     }
-    catch (error) {
+    catch {
         return null;
     }
 }
@@ -202,27 +231,20 @@ function isWordItem(value) {
     if (!value || typeof value !== 'object')
         return false;
     const item = value;
-    return typeof item.text === 'string'
-        && typeof item.kana === 'string'
-        && typeof item.mean === 'string';
+    return typeof item.text === 'string' && typeof item.kana === 'string' && typeof item.mean === 'string';
 }
 function isStoredDictionary(value) {
     if (!value || typeof value !== 'object')
         return false;
     const data = value;
-    return data.version === STORAGE_VERSION
-        && isSortMode(data.sortMode)
-        && isTrieNode(data.root);
-}
-function isSortMode(value) {
-    return value === 'text' || value === 'kana' || value === 'mean' || value === 'recent';
+    return data.version === STORAGE_VERSION && isSortMode(data.sortMode) && isTrieNode(data.root);
 }
 function isTrieNode(value) {
     if (!value || typeof value !== 'object')
         return false;
     const node = value;
-    // 🌟 [개선] 자식 노드들의 구조적 정밀성 검증 추가 (TypeScript 컴파일러 추론 극대화)
-    return typeof node.hash === 'string'
-        && node.children !== null
-        && typeof node.children === 'object';
+    return typeof node.key === 'string' && node.children !== null && typeof node.children === 'object';
+}
+function isSortMode(value) {
+    return value === 'text' || value === 'kana' || value === 'mean' || value === 'recent';
 }
