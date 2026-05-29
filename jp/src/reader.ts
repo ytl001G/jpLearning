@@ -49,7 +49,10 @@ document.addEventListener('DOMContentLoaded', (): void => {
 
     const storageKey = document.body.dataset.storageKey || 'forgotten_japanese_words_ko';
     const syncUserKey = `${storageKey}_sync_user`;
-    const firebaseConfigSrc = document.body.dataset.firebaseConfigSrc || './src/firebaseConfig.js';
+    const firebaseConfigSrc = new URL(
+        document.body.dataset.firebaseConfigSrc || './src/firebaseConfig.js',
+        document.baseURI
+    ).href;
     const dictionary = new DictionaryStore(localStorage, storageKey, ['forgotten_words_ko']);
     let promptContentText = '';
     let exampleJsonText = '';
