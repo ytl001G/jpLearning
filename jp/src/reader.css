@@ -324,7 +324,7 @@ h2::after {
 
 .sync-panel {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
     gap: 10px 12px;
     margin-bottom: 18px;
     padding: 14px;

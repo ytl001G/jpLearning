@@ -5,8 +5,11 @@ service cloud.firestore {
     match /wordbooks/{userId} {
       allow read: if userId.matches('^[a-zA-Z0-9_-]{3,40}$');
       allow write: if userId.matches('^[a-zA-Z0-9_-]{3,40}$')
-        && request.resource.data.keys().hasOnly(['dictionary', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['dictionary', 'ownerId', 'passwordHash', 'updatedAt'])
         && request.resource.data.dictionary is map
+        && request.resource.data.ownerId is string
+        && request.resource.data.ownerId == userId
+        && request.resource.data.passwordHash.matches('^[a-f0-9]{64}$')
         && request.resource.data.updatedAt is string;
     }
   }

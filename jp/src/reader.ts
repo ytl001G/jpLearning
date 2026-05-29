@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
     const addMean = document.getElementById('add-mean') as HTMLInputElement;
     const addWordSubmit = document.getElementById('add-word-submit') as HTMLButtonElement;
     const syncUserId = document.getElementById('sync-user-id') as HTMLInputElement;
+    const syncPassword = document.getElementById('sync-password') as HTMLInputElement;
     const syncUploadBtn = document.getElementById('sync-upload-btn') as HTMLButtonElement;
     const syncDownloadBtn = document.getElementById('sync-download-btn') as HTMLButtonElement;
     const syncStatus = document.getElementById('sync-status') as HTMLDivElement;
@@ -49,10 +50,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
 
     const storageKey = document.body.dataset.storageKey || 'forgotten_japanese_words_ko';
     const syncUserKey = `${storageKey}_sync_user`;
-    const firebaseConfigSrc = new URL(
-        document.body.dataset.firebaseConfigSrc || './src/firebaseConfig.js',
-        document.baseURI
-    ).href;
+    const firebaseConfigSrc = new URL('./firebaseConfig.js', import.meta.url).href;
     const dictionary = new DictionaryStore(localStorage, storageKey, ['forgotten_words_ko']);
     let promptContentText = '';
     let exampleJsonText = '';
@@ -194,8 +192,14 @@ document.addEventListener('DOMContentLoaded', (): void => {
 
     async function syncDictionary(mode: 'upload' | 'download'): Promise<void> {
         const userId = syncUserId.value.trim();
+        const password = syncPassword.value;
         if (!/^[a-zA-Z0-9_-]{3,40}$/.test(userId)) {
             showToast('사용자 ID는 영문, 숫자, -, _로 3자 이상 입력해 주세요.', true);
+            return;
+        }
+
+        if (password.length < 4) {
+            showToast('비밀번호는 4자 이상 입력해 주세요.', true);
             return;
         }
 
@@ -203,7 +207,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
         setSyncBusy(true, mode === 'upload' ? '업로드 중...' : '불러오는 중...');
 
         try {
-            await syncDictionaryWithFirebase(mode, userId);
+            await syncDictionaryWithFirebase(mode, userId, password);
         } catch (error) {
             const message = getSyncErrorMessage(error);
             setSyncStatus(message);
@@ -213,13 +217,24 @@ document.addEventListener('DOMContentLoaded', (): void => {
         }
     }
 
-    async function syncDictionaryWithFirebase(mode: 'upload' | 'download', userId: string): Promise<void> {
+    async function syncDictionaryWithFirebase(mode: 'upload' | 'download', userId: string, password: string): Promise<void> {
         const firebase = await loadFirebaseSync();
+        const passwordHash = await createPasswordHash(password);
         const documentRef = firebase.doc(firebase.db, 'wordbooks', userId);
+        const snapshot = await firebase.getDoc(documentRef);
+
+        if (snapshot.exists()) {
+            const savedData = snapshot.data();
+            if (savedData.passwordHash !== passwordHash) {
+                throw new Error('wrong_password');
+            }
+        }
 
         if (mode === 'upload') {
             await firebase.setDoc(documentRef, {
                 dictionary: dictionary.exportData(),
+                ownerId: userId,
+                passwordHash,
                 updatedAt: new Date().toISOString()
             });
             setSyncStatus('Firebase에 단어장을 저장했습니다.');
@@ -227,7 +242,6 @@ document.addEventListener('DOMContentLoaded', (): void => {
             return;
         }
 
-        const snapshot = await firebase.getDoc(documentRef);
         if (!snapshot.exists()) throw new Error('not_found');
 
         const data = snapshot.data();
@@ -237,6 +251,12 @@ document.addEventListener('DOMContentLoaded', (): void => {
         refreshWordbook();
         setSyncStatus('Firebase에서 단어장을 불러왔습니다.');
         showToast('동기화 불러오기 완료');
+    }
+
+    async function createPasswordHash(password: string): Promise<string> {
+        const input = new TextEncoder().encode(password);
+        const hash = await crypto.subtle.digest('SHA-256', input);
+        return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
     }
 
     async function loadFirebaseSync(): Promise<{
@@ -288,11 +308,15 @@ document.addEventListener('DOMContentLoaded', (): void => {
             return 'Firebase 설정값을 jp/src/firebaseConfig.js에 먼저 입력해 주세요.';
         }
 
+        if (error.message === 'wrong_password') {
+            return '비밀번호가 맞지 않습니다.';
+        }
+
         return 'Firebase 연결에 실패했습니다. 설정값과 Firestore 규칙을 확인해 주세요.';
     }
 
     function updateSyncAvailability(): void {
-        setSyncStatus('Firebase 설정값을 입력하면 GitHub Pages에서도 PC와 모바일 단어장이 동기화됩니다.');
+        setSyncStatus('같은 ID와 비밀번호를 입력하면 GitHub Pages에서도 PC와 모바일 단어장이 동기화됩니다.');
     }
 
     function setSyncBusy(isBusy: boolean, message?: string): void {

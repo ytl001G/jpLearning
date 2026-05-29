@@ -10,7 +10,6 @@
 <body
     data-storage-key="forgotten_japanese_words_ko"
     data-sync-provider="firebase"
-    data-firebase-config-src="./src/firebaseConfig.js"
 >
 
 <div id="tab-reader" class="page-content active">
@@ -58,11 +57,15 @@
                 <span>사용자 ID</span>
                 <input type="text" id="sync-user-id" autocomplete="username" placeholder="예: my-jp-words">
             </label>
+            <label class="sync-field">
+                <span>비밀번호</span>
+                <input type="password" id="sync-password" autocomplete="current-password" placeholder="단어장 비밀번호">
+            </label>
             <div class="sync-actions">
                 <button class="sync-btn primary" id="sync-upload-btn" type="button">업로드</button>
                 <button class="sync-btn" id="sync-download-btn" type="button">불러오기</button>
             </div>
-            <div class="sync-status" id="sync-status">PC와 모바일에서 같은 ID를 입력하면 단어장을 공유할 수 있습니다.</div>
+            <div class="sync-status" id="sync-status">PC와 모바일에서 같은 ID와 비밀번호를 입력하면 단어장을 공유할 수 있습니다.</div>
         </div>
         
         <div class="study-card-area">
