@@ -19,11 +19,14 @@ interface WordbookData {
   updatedAt: string;
 }
 
+// 🔒 [안전 패치] Auth 관련 메서드 및 객체 타입 추가
 interface FirebaseModuleWrapper {
   db: any; 
+  auth: any;
   doc: (...args: any[]) => any;
   getDoc: (docRef: any) => Promise<any>;
   setDoc: (docRef: any, data: any) => Promise<void>;
+  signInAnonymously: (auth: any) => Promise<any>;
 }
 
 // -------------------------------------------------------------------------
@@ -106,6 +109,7 @@ if (entryLink && dialog && form && cancelBtn && userIdInput && passwordInput && 
     }
   });
 
+  // 💡 상위 if문 스코프 덕분에 내부에서는 안전하게 null이 아님이 보장됩니다.
   function openLogin(): void {
     dialog!.classList.add('show');
     dialog!.setAttribute('aria-hidden', 'false');
@@ -130,6 +134,10 @@ if (entryLink && dialog && form && cancelBtn && userIdInput && passwordInput && 
 
 async function verifyOrCreateWordbook(userId: string, passwordHash: string): Promise<void> {
   const firebase = await loadFirebase();
+  
+  // 🔒 [안전 패치] 데이터 조회/생성 전에 임시 익명 토큰 발행하여 규칙 통과 준비
+  await firebase.signInAnonymously(firebase.auth);
+
   const documentRef = firebase.doc(firebase.db, 'wordbooks', userId);
   const snapshot = await firebase.getDoc(documentRef);
 
@@ -159,18 +167,22 @@ async function loadFirebase(): Promise<FirebaseModuleWrapper> {
   
   const APP_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
   const FIRESTORE_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+  const AUTH_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js'; // 🔒 [안전 패치] Auth 모듈 주소 정의
 
   const appModule = await import(/* @vite-ignore */ APP_URL) as any;
   const firestoreModule = await import(/* @vite-ignore */ FIRESTORE_URL) as any;
+  const authModule = await import(/* @vite-ignore */ AUTH_URL) as any; // 🔒 [안전 패치] Auth 모듈 동적 Import
   
   const apps = appModule.getApps();
   const app = apps.length > 0 ? apps[0] : appModule.initializeApp(configModule.firebaseConfig);
 
   return {
     db: firestoreModule.getFirestore(app),
+    auth: authModule.getAuth(app), // 🔒 [안전 패치] Auth 인스턴스 할당
     doc: firestoreModule.doc,
     getDoc: firestoreModule.getDoc,
-    setDoc: firestoreModule.setDoc
+    setDoc: firestoreModule.setDoc,
+    signInAnonymously: authModule.signInAnonymously // 🔒 [안전 패치] 익명로그인 함수 바인딩
   };
 }
 
