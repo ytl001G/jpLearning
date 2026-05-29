@@ -67,6 +67,16 @@ export class DictionaryStore {
     count() {
         return this.entries().length;
     }
+    exportData() {
+        return JSON.parse(JSON.stringify(this.data));
+    }
+    importData(data) {
+        if (!isStoredDictionary(data))
+            return false;
+        this.data = data;
+        this.save();
+        return true;
+    }
     findPath(text) {
         const normalized = normalizeKey(text);
         if (!normalized)

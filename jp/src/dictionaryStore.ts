@@ -102,6 +102,17 @@ export class DictionaryStore {
         return this.entries().length;
     }
 
+    exportData(): StoredDictionary {
+        return JSON.parse(JSON.stringify(this.data)) as StoredDictionary;
+    }
+
+    importData(data: unknown): boolean {
+        if (!isStoredDictionary(data)) return false;
+        this.data = data;
+        this.save();
+        return true;
+    }
+
     private findPath(text: string): Array<{ key: string; node: TrieNode }> | null {
         const normalized = normalizeKey(text);
         if (!normalized) return null;

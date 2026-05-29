@@ -33,6 +33,10 @@ document.addEventListener('DOMContentLoaded', (): void => {
     const addKana = document.getElementById('add-kana') as HTMLInputElement;
     const addMean = document.getElementById('add-mean') as HTMLInputElement;
     const addWordSubmit = document.getElementById('add-word-submit') as HTMLButtonElement;
+    const syncUserId = document.getElementById('sync-user-id') as HTMLInputElement;
+    const syncUploadBtn = document.getElementById('sync-upload-btn') as HTMLButtonElement;
+    const syncDownloadBtn = document.getElementById('sync-download-btn') as HTMLButtonElement;
+    const syncStatus = document.getElementById('sync-status') as HTMLDivElement;
 
     const studyCard = new StudyCard(
         document.getElementById('card-jp') as HTMLDivElement,
@@ -44,6 +48,8 @@ document.addEventListener('DOMContentLoaded', (): void => {
     );
 
     const storageKey = document.body.dataset.storageKey || 'forgotten_japanese_words_ko';
+    const syncUserKey = `${storageKey}_sync_user`;
+    const syncApiBase = (document.body.dataset.syncApiBase || '../api/sync').replace(/\/$/, '');
     const dictionary = new DictionaryStore(localStorage, storageKey, ['forgotten_words_ko']);
     let promptContentText = '';
     let exampleJsonText = '';
@@ -62,6 +68,7 @@ document.addEventListener('DOMContentLoaded', (): void => {
     });
 
     sortSelect.value = dictionary.getSortMode();
+    syncUserId.value = localStorage.getItem(syncUserKey) || '';
     setupSortDropdown(sortSelect);
     refreshWordbook();
     loadPromptText();
@@ -146,6 +153,18 @@ document.addEventListener('DOMContentLoaded', (): void => {
         copyLoadedText(exampleJsonText || exampleJsonEl.textContent || exampleJsonEl.innerText, copyExampleBtn, '예시 복사하기');
     });
 
+    syncUserId.addEventListener('input', (): void => {
+        localStorage.setItem(syncUserKey, syncUserId.value.trim());
+    });
+
+    syncUploadBtn.addEventListener('click', (): void => {
+        syncDictionary('upload');
+    });
+
+    syncDownloadBtn.addEventListener('click', (): void => {
+        syncDictionary('download');
+    });
+
     function refreshWordbook(): void {
         const words = dictionary.getAll();
         renderWordbook(wordbookContainer, words, removeWord);
@@ -167,6 +186,64 @@ document.addEventListener('DOMContentLoaded', (): void => {
         readerSupportBoxes.forEach((box) => {
             box.style.display = isVisible ? 'block' : 'none';
         });
+    }
+
+    async function syncDictionary(mode: 'upload' | 'download'): Promise<void> {
+        const userId = syncUserId.value.trim();
+        if (!/^[a-zA-Z0-9_-]{3,40}$/.test(userId)) {
+            showToast('사용자 ID는 영문, 숫자, -, _로 3자 이상 입력해 주세요.', true);
+            return;
+        }
+
+        localStorage.setItem(syncUserKey, userId);
+        setSyncBusy(true, mode === 'upload' ? '업로드 중...' : '불러오는 중...');
+
+        try {
+            const endpoint = `${syncApiBase}/${encodeURIComponent(userId)}`;
+            if (mode === 'upload') {
+                const response = await fetch(endpoint, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dictionary.exportData())
+                });
+                if (!response.ok) throw new Error('upload_failed');
+                setSyncStatus('서버에 단어장을 저장했습니다.');
+                showToast('동기화 업로드 완료');
+                return;
+            }
+
+            const response = await fetch(endpoint);
+            if (response.status === 404) {
+                throw new Error('not_found');
+            }
+            if (!response.ok) throw new Error('download_failed');
+
+            const data = await response.json();
+            if (!dictionary.importData(data)) throw new Error('invalid_data');
+            sortSelect.value = dictionary.getSortMode();
+            sortSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            refreshWordbook();
+            setSyncStatus('서버에서 단어장을 불러왔습니다.');
+            showToast('동기화 불러오기 완료');
+        } catch (error) {
+            const message = error instanceof Error && error.message === 'not_found'
+                ? '이 ID로 저장된 단어장이 아직 없습니다.'
+                : '동기화 서버에 연결하지 못했습니다. syncServer.js로 실행했는지 확인해 주세요.';
+            setSyncStatus(message);
+            showToast(message, true);
+        } finally {
+            setSyncBusy(false);
+        }
+    }
+
+    function setSyncBusy(isBusy: boolean, message?: string): void {
+        syncUploadBtn.disabled = isBusy;
+        syncDownloadBtn.disabled = isBusy;
+        if (message) setSyncStatus(message);
+    }
+
+    function setSyncStatus(message: string): void {
+        syncStatus.textContent = message;
     }
 
     async function loadPromptText(): Promise<void> {
