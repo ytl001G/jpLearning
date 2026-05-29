@@ -107,9 +107,25 @@ export class DictionaryStore {
         return JSON.parse(JSON.stringify(this.data)) as StoredDictionary;
     }
 
+    // 🌟 [수정] 외부(Firebase 등)에서 가져온 구형 데이터 유형을 유연하게 변환 및 마이그레이션하도록 개선
     async importData(data: unknown): Promise<boolean> {
-        const normalized = normalizeStoredDictionary(data);
+        let normalized: StoredDictionary | null = null;
+
+        if (typeof data === 'string') {
+            normalized = parseStoredText(data);
+        } else if (data && typeof data === 'object') {
+            if (isStoredDictionary(data)) {
+                normalized = data;
+            } else if (Array.isArray(data)) {
+                normalized = dictionaryFromWords(data);
+            } else {
+                // 구버전 트리 구조 등은 문자열 직렬화 후 안전하게 하위 호환 함수로 위임
+                normalized = parseStoredText(JSON.stringify(data));
+            }
+        }
+
         if (!normalized) return false;
+
         this.data = normalized;
         await this.save();
         return true;
@@ -138,18 +154,23 @@ export class DictionaryStore {
         return output;
     }
 
+    // 🌟 [수정] 로컬 저장소가 손상되었거나 구조가 비정상적인 경우 에러를 던지지 않고 안전하게 새 단어장으로 복구 및 예방
     private async load(): Promise<StoredDictionary> {
-        const raw = this.storage.getItem(this.storageKey);
-        if (raw) {
-            const parsed = parseStoredText(raw);
-            if (parsed) return parsed;
-        }
+        try {
+            const raw = this.storage.getItem(this.storageKey);
+            if (raw) {
+                const parsed = parseStoredText(raw);
+                if (parsed) return parsed;
+            }
 
-        for (const key of this.legacyKeys) {
-            const legacyRaw = this.storage.getItem(key);
-            if (!legacyRaw) continue;
-            const legacyParsed = parseStoredText(legacyRaw);
-            if (legacyParsed) return legacyParsed;
+            for (const key of this.legacyKeys) {
+                const legacyRaw = this.storage.getItem(key);
+                if (!legacyRaw) continue;
+                const legacyParsed = parseStoredText(legacyRaw);
+                if (legacyParsed) return legacyParsed;
+            }
+        } catch (e) {
+            console.error("로컬 스토리지 데이터 로드 실패, 자동 초기화 진행:", e);
         }
 
         return {

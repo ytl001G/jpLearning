@@ -1,6 +1,10 @@
 const STORAGE_VERSION = 2;
 const DEFAULT_SORT_MODE = 'text';
 export class DictionaryStore {
+    storage;
+    storageKey;
+    legacyKeys;
+    data;
     constructor(storage, storageKey, legacyKeys = []) {
         this.storage = storage;
         this.storageKey = storageKey;
@@ -11,13 +15,12 @@ export class DictionaryStore {
         await this.save();
     }
     async add(item) {
-        var _a;
         const normalized = normalizeKey(item.text);
         if (!normalized || this.has(item.text))
             return false;
         let node = this.data.root;
         for (const char of Array.from(normalized)) {
-            (_a = node.children)[char] ?? (_a[char] = createNode(char));
+            node.children[char] ??= createNode(char);
             node = node.children[char];
         }
         node.item = { ...item };
@@ -71,8 +74,24 @@ export class DictionaryStore {
     exportData() {
         return JSON.parse(JSON.stringify(this.data));
     }
+    // 🌟 [수정] 외부(Firebase 등)에서 가져온 구형 데이터 유형을 유연하게 변환 및 마이그레이션하도록 개선
     async importData(data) {
-        const normalized = normalizeStoredDictionary(data);
+        let normalized = null;
+        if (typeof data === 'string') {
+            normalized = parseStoredText(data);
+        }
+        else if (data && typeof data === 'object') {
+            if (isStoredDictionary(data)) {
+                normalized = data;
+            }
+            else if (Array.isArray(data)) {
+                normalized = dictionaryFromWords(data);
+            }
+            else {
+                // 구버전 트리 구조 등은 문자열 직렬화 후 안전하게 하위 호환 함수로 위임
+                normalized = parseStoredText(JSON.stringify(data));
+            }
+        }
         if (!normalized)
             return false;
         this.data = normalized;
@@ -99,20 +118,26 @@ export class DictionaryStore {
         walkTrie(this.data.root, output);
         return output;
     }
+    // 🌟 [수정] 로컬 저장소가 손상되었거나 구조가 비정상적인 경우 에러를 던지지 않고 안전하게 새 단어장으로 복구 및 예방
     async load() {
-        const raw = this.storage.getItem(this.storageKey);
-        if (raw) {
-            const parsed = parseStoredText(raw);
-            if (parsed)
-                return parsed;
+        try {
+            const raw = this.storage.getItem(this.storageKey);
+            if (raw) {
+                const parsed = parseStoredText(raw);
+                if (parsed)
+                    return parsed;
+            }
+            for (const key of this.legacyKeys) {
+                const legacyRaw = this.storage.getItem(key);
+                if (!legacyRaw)
+                    continue;
+                const legacyParsed = parseStoredText(legacyRaw);
+                if (legacyParsed)
+                    return legacyParsed;
+            }
         }
-        for (const key of this.legacyKeys) {
-            const legacyRaw = this.storage.getItem(key);
-            if (!legacyRaw)
-                continue;
-            const legacyParsed = parseStoredText(legacyRaw);
-            if (legacyParsed)
-                return legacyParsed;
+        catch (e) {
+            console.error("로컬 스토리지 데이터 로드 실패, 자동 초기화 진행:", e);
         }
         return {
             version: STORAGE_VERSION,
@@ -131,13 +156,12 @@ function dictionaryFromWords(words) {
         root: createNode('root')
     };
     words.filter(isWordItem).forEach((item, index) => {
-        var _a;
         const normalized = normalizeKey(item.text);
         if (!normalized)
             return;
         let node = data.root;
         for (const char of Array.from(normalized)) {
-            (_a = node.children)[char] ?? (_a[char] = createNode(char));
+            node.children[char] ??= createNode(char);
             node = node.children[char];
         }
         node.item = { ...item };
