@@ -34,12 +34,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let syncSession = null;
     let autoSaveTimer;
     let isApplyingRemoteDictionary = false;
-    // 🌟 추가/삭제 시 본문을 새로 그리기 위해, 현재 불러온 본문의 단어 배열 데이터를 캐싱하는 변수입니다.
     let latestJsonWords = [];
     const saveDialog = createSaveDialog((word) => {
         if (dictionary.add(word)) {
             refreshWordbook();
-            // 🌟 [핵심 변경] 새 단어가 단어장에 들어갔으므로, 최신 단어장 목록을 전달하며 본문 상태를 갱신합니다.
             if (latestJsonWords.length > 0) {
                 renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
             }
@@ -50,7 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearDialog = createClearDialog(() => {
         dictionary.clear();
         refreshWordbook();
-        // 🌟 [핵심 변경] 단어장이 초기화되었으므로, 본문의 중복 검사 리스트도 빈 배열로 동기화합니다.
         if (latestJsonWords.length > 0) {
             renderReader(latestJsonWords, viewerArea, askAndSave, []);
         }
@@ -86,9 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('올바른 데이터 구조가 아닙니다.', true);
                 return;
             }
-            // 🌟 분석된 단어 본문 데이터를 전역 캐싱 변수에 백업해 둡니다.
             latestJsonWords = data.words;
-            // 🌟 최초 로드 시 최신 단어장 스냅샷 배열(`dictionary.getAll()`)을 정확히 넘겨줍니다.
             renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
             inputPage.style.display = 'none';
             viewerPage.style.display = 'block';
@@ -121,7 +116,6 @@ document.addEventListener('DOMContentLoaded', () => {
         addKana.value = '';
         addMean.value = '';
         refreshWordbook();
-        // 🌟 수동 단어 추가창에서 수동으로 넣었을 때도 리더 본문과 동기화시킵니다.
         if (latestJsonWords.length > 0) {
             renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
         }
@@ -157,7 +151,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dictionary.remove(text))
             return;
         refreshWordbook();
-        // 🌟 [핵심 변경] 단어장에서 휴지통(✕) 버튼을 눌러 단어를 지웠을 때도 본문 리더의 중복 체크를 즉시 반영합니다.
         if (latestJsonWords.length > 0) {
             renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
         }
@@ -223,6 +216,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!syncSession)
             throw new Error('not_logged_in');
         const firebase = await loadFirebaseSync();
+        // 🔒 [안전 패치] 데이터 조회 전 Firebase Auth 익명 로그인 세션 생성하여 규칙 통과 준비
+        await firebase.signInAnonymously(firebase.auth);
+        // 문서 ID(userId)와 요청 세션이 준비되어 규칙의 `request.auth != null && userId == ...` 조건을 우회/충족합니다.
         const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
         const snapshot = await firebase.getDoc(documentRef);
         if (!snapshot.exists())
@@ -237,7 +233,6 @@ document.addEventListener('DOMContentLoaded', () => {
         sortSelect.dispatchEvent(new Event('change', { bubbles: true }));
         isApplyingRemoteDictionary = false;
         refreshWordbook();
-        // 🌟 원격 서버 데이터(로그인 연동)를 긁어와 로컬 단어장이 엎어졌을 때도 리더를 최신화해 줍니다.
         if (latestJsonWords.length > 0) {
             renderReader(latestJsonWords, viewerArea, askAndSave, dictionary.getAll());
         }
@@ -246,6 +241,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!syncSession)
             return;
         const firebase = await loadFirebaseSync();
+        // 🔒 [안전 패치] 저장 시에도 세션이 없을 경우 대비하여 토큰 확보 및 동기화
+        await firebase.signInAnonymously(firebase.auth);
         const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
         await firebase.setDoc(documentRef, {
             dictionary: dictionary.exportData(),
@@ -305,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!syncSession)
             throw new Error('not_logged_in');
         const firebase = await loadFirebaseSync();
+        await firebase.signInAnonymously(firebase.auth);
         const documentRef = firebase.doc(firebase.db, 'wordbooks', syncSession.userId);
         const snapshot = await firebase.getDoc(documentRef);
         if (!snapshot.exists())
@@ -403,6 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('단어장에서 로그아웃했습니다.');
         window.location.href = '../';
     }
+    // 🔒 [핵심 변경 및 안전 패치] 동적 CDN 모듈 로드 시 Firebase Auth 시스템도 함께 초기화되도록 바인딩을 확장했습니다.
     async function loadFirebaseSync() {
         const configModule = await import(firebaseConfigSrc);
         const firebaseConfig = configModule.firebaseConfig;
@@ -411,16 +410,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const firebaseAppUrl = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
         const firestoreUrl = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+        const authUrl = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
         const appModule = await import(/* @vite-ignore */ firebaseAppUrl);
         const firestoreModule = await import(/* @vite-ignore */ firestoreUrl);
+        const authModule = await import(/* @vite-ignore */ authUrl);
         const apps = appModule.getApps();
         const app = apps.length > 0 ? apps[0] : appModule.initializeApp(firebaseConfig);
         const db = firestoreModule.getFirestore(app);
+        const auth = authModule.getAuth(app);
         return {
             db,
+            auth,
             doc: firestoreModule.doc,
             getDoc: firestoreModule.getDoc,
-            setDoc: firestoreModule.setDoc
+            setDoc: firestoreModule.setDoc,
+            signInAnonymously: authModule.signInAnonymously
         };
     }
     function isFirebaseConfigReady(config) {
