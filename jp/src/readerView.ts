@@ -11,10 +11,21 @@ export function renderReader(
     onSaveRequest: (word: WordItem) => void,
     savedWords: WordItem[] | { list: WordItem[] } = []
 ): void {
+    // 🌟 [핵심 개선] 재렌더링 시 기존에 사용자가 클릭해서 열어둔 단어들의 해독 단계(stage)를 임시 보관합니다.
+    const stageBackup: Record<string, string> = {};
+    const existingSpans = viewerArea.querySelectorAll('span.playable');
+    existingSpans.forEach((el) => {
+        const span = el as HTMLSpanElement;
+        const textKey = span.textContent || '';
+        const stageVal = span.dataset.stage || '0';
+        if (textKey && stageVal !== '0') {
+            stageBackup[textKey] = stageVal; // 예: {"요미마시타": "2"}
+        }
+    });
+
     viewerArea.innerHTML = '';
 
     words.forEach((wordData) => {
-        // utils.js의 WordData 타입 정의에 맞춰 튜플 구조 분해 수행
         const [type, text, kana, original, originalKana, contextMean, mean] = wordData;
 
         const pronunciation = kana || '';
@@ -42,10 +53,15 @@ export function renderReader(
         }
 
         span.classList.add('playable');
-        span.dataset.stage = '0';
-
-        const isPronunciationOmitted = !pronunciation.trim() || text === pronunciation;
         
+        // 🌟 [핵심 개선] 이전에 열려 있던 단어라면, 백업해둔 해독 단계(stage)를 복원합니다.
+        const savedStage = stageBackup[text] || '0';
+        span.dataset.stage = savedStage;
+
+        // 복원된 stage 단계에 맞게 UI 클래스와 힌트 텍스트 복구하기
+        const isPronunciationOmitted = !pronunciation.trim() || text === pronunciation;
+        restoreStageUI(span, Number.parseInt(savedStage, 10), isPronunciationOmitted, type, pronunciation, displayMean);
+
         span.addEventListener('click', function (this: HTMLSpanElement): void {
             let stage = Number.parseInt(this.dataset.stage || '0', 10);
             this.classList.remove('stage-1', 'stage-2', 'stage-3');
@@ -89,7 +105,6 @@ export function renderReader(
             });
 
             if (isAlreadySaved) {
-                // 🌟 [수정] utils에서 가져온 showToast 유틸리티 함수를 그대로 활용합니다.
                 showToast('이미 저장된 단어입니다.');
             } else {
                 onSaveRequest(wordToSave);
@@ -98,6 +113,40 @@ export function renderReader(
 
         viewerArea.appendChild(span);
     });
+}
+
+/**
+ * 🌟 [헬퍼 함수] 복원된 stage에 맞춰 span 요소의 디자인 상태를 원복해 줍니다.
+ */
+function restoreStageUI(
+    span: HTMLSpanElement,
+    stage: number,
+    isPronunciationOmitted: boolean,
+    type: number,
+    pronunciation: string,
+    displayMean: string
+): void {
+    if (stage === 0) {
+        span.dataset.hint = '';
+        return;
+    }
+
+    span.classList.remove('stage-1', 'stage-2', 'stage-3');
+
+    if (isPronunciationOmitted || type === 2 || type === 4) {
+        if (stage === 1) {
+            span.dataset.hint = ` [${displayMean}]`;
+            span.classList.add('stage-3');
+        }
+    } else {
+        if (stage === 1) {
+            span.dataset.hint = ` (${pronunciation})`;
+            span.classList.add('stage-1');
+        } else if (stage === 2) {
+            span.dataset.hint = ` (${pronunciation}) [${displayMean}]`;
+            span.classList.add('stage-2');
+        }
+    }
 }
 
 export function renderWordbook(
