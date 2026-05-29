@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const studyCard = new StudyCard(document.getElementById('card-jp'), document.getElementById('card-hint'), document.getElementById('card-counter'), document.getElementById('card-ctrls'), document.getElementById('card-prev'), document.getElementById('card-next'));
     const storageKey = document.body.dataset.storageKey || 'forgotten_japanese_words_ko';
     const syncUserKey = `${storageKey}_sync_user`;
-    const syncApiBase = (document.body.dataset.syncApiBase || '../api/sync').replace(/\/$/, '');
+    const firebaseConfigSrc = document.body.dataset.firebaseConfigSrc || './src/firebaseConfig.js';
     const dictionary = new DictionaryStore(localStorage, storageKey, ['forgotten_words_ko']);
     let promptContentText = '';
     let exampleJsonText = '';
@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshWordbook();
     loadPromptText();
     loadExampleJson();
+    updateSyncAvailability();
     window.switchTab = (tabId) => {
         document.querySelectorAll('.page-content').forEach((p) => p.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
@@ -153,44 +154,83 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem(syncUserKey, userId);
         setSyncBusy(true, mode === 'upload' ? '업로드 중...' : '불러오는 중...');
         try {
-            const endpoint = `${syncApiBase}/${encodeURIComponent(userId)}`;
-            if (mode === 'upload') {
-                const response = await fetch(endpoint, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dictionary.exportData())
-                });
-                if (!response.ok)
-                    throw new Error('upload_failed');
-                setSyncStatus('서버에 단어장을 저장했습니다.');
-                showToast('동기화 업로드 완료');
-                return;
-            }
-            const response = await fetch(endpoint);
-            if (response.status === 404) {
-                throw new Error('not_found');
-            }
-            if (!response.ok)
-                throw new Error('download_failed');
-            const data = await response.json();
-            if (!dictionary.importData(data))
-                throw new Error('invalid_data');
-            sortSelect.value = dictionary.getSortMode();
-            sortSelect.dispatchEvent(new Event('change', { bubbles: true }));
-            refreshWordbook();
-            setSyncStatus('서버에서 단어장을 불러왔습니다.');
-            showToast('동기화 불러오기 완료');
+            await syncDictionaryWithFirebase(mode, userId);
         }
         catch (error) {
-            const message = error instanceof Error && error.message === 'not_found'
-                ? '이 ID로 저장된 단어장이 아직 없습니다.'
-                : '동기화 서버에 연결하지 못했습니다. syncServer.js로 실행했는지 확인해 주세요.';
+            const message = getSyncErrorMessage(error);
             setSyncStatus(message);
             showToast(message, true);
         }
         finally {
             setSyncBusy(false);
         }
+    }
+    async function syncDictionaryWithFirebase(mode, userId) {
+        const firebase = await loadFirebaseSync();
+        const documentRef = firebase.doc(firebase.db, 'wordbooks', userId);
+        if (mode === 'upload') {
+            await firebase.setDoc(documentRef, {
+                dictionary: dictionary.exportData(),
+                updatedAt: new Date().toISOString()
+            });
+            setSyncStatus('Firebase에 단어장을 저장했습니다.');
+            showToast('동기화 업로드 완료');
+            return;
+        }
+        const snapshot = await firebase.getDoc(documentRef);
+        if (!snapshot.exists())
+            throw new Error('not_found');
+        const data = snapshot.data();
+        if (!dictionary.importData(data.dictionary))
+            throw new Error('invalid_data');
+        sortSelect.value = dictionary.getSortMode();
+        sortSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        refreshWordbook();
+        setSyncStatus('Firebase에서 단어장을 불러왔습니다.');
+        showToast('동기화 불러오기 완료');
+    }
+    async function loadFirebaseSync() {
+        const configModule = await import(firebaseConfigSrc);
+        const firebaseConfig = configModule.firebaseConfig;
+        if (!isFirebaseConfigReady(firebaseConfig)) {
+            throw new Error('firebase_not_configured');
+        }
+        const firebaseAppUrl = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+        const firestoreUrl = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+        const appModule = await import(firebaseAppUrl);
+        const firestoreModule = await import(firestoreUrl);
+        const apps = appModule.getApps();
+        const app = apps.length > 0 ? apps[0] : appModule.initializeApp(firebaseConfig);
+        const db = firestoreModule.getFirestore(app);
+        return {
+            db,
+            doc: firestoreModule.doc,
+            getDoc: firestoreModule.getDoc,
+            setDoc: firestoreModule.setDoc
+        };
+    }
+    function isFirebaseConfigReady(config) {
+        if (!config || typeof config !== 'object')
+            return false;
+        const candidate = config;
+        return ['apiKey', 'authDomain', 'projectId', 'appId'].every((key) => {
+            return typeof candidate[key] === 'string' && candidate[key].trim().length > 0;
+        });
+    }
+    function getSyncErrorMessage(error) {
+        if (!(error instanceof Error)) {
+            return '동기화 중 알 수 없는 문제가 발생했습니다.';
+        }
+        if (error.message === 'not_found') {
+            return '이 ID로 저장된 단어장이 아직 없습니다.';
+        }
+        if (error.message === 'firebase_not_configured') {
+            return 'Firebase 설정값을 jp/src/firebaseConfig.js에 먼저 입력해 주세요.';
+        }
+        return 'Firebase 연결에 실패했습니다. 설정값과 Firestore 규칙을 확인해 주세요.';
+    }
+    function updateSyncAvailability() {
+        setSyncStatus('Firebase 설정값을 입력하면 GitHub Pages에서도 PC와 모바일 단어장이 동기화됩니다.');
     }
     function setSyncBusy(isBusy, message) {
         syncUploadBtn.disabled = isBusy;
